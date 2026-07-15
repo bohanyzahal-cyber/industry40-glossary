@@ -1,0 +1,7 @@
+# Ignore everything by default — avoids committing course materials (copyright) and local config
+/*
+
+# Allow only the app and repo docs
+!/.gitignore
+!/README.md
+!/מילון-מושגים-Industry40.html

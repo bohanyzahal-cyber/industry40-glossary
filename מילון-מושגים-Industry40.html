@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מילון מושגים ותרגול — Industry 4.0</title>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#17212b; --panel2:#1e2b38; --line:#2b3b4a;
+    --txt:#e8eef4; --muted:#93a4b3; --accent:#2ea6a0; --accent2:#3aa0e0;
+    --ok:#2fbf71; --bad:#e0574f; --warn:#e0a53a; --chip:#243444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--txt);line-height:1.5}
+  header{background:linear-gradient(120deg,#123,#1a3a3f);padding:18px 20px;border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:20px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 16px}
+  nav{display:flex;gap:6px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  nav button{flex:1;background:none;border:none;color:var(--muted);padding:14px 8px;font-size:15px;cursor:pointer;border-bottom:3px solid transparent}
+  nav button.active{color:var(--txt);border-bottom-color:var(--accent);font-weight:600}
+  main{padding:18px 0 60px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center}
+  input,select,textarea{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  .search{flex:1;min-width:180px}
+  .btn{background:var(--accent);color:#04201f;border:none;border-radius:8px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .term-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;cursor:pointer}
+  .term-he{font-size:17px;font-weight:700}
+  .term-en{color:var(--accent2);font-size:13px;direction:ltr;text-align:left}
+  .short{color:var(--txt);margin-top:6px}
+  .more{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);color:var(--muted);font-size:14px}
+  .more.open{display:block}
+  .more b{color:var(--txt)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .chip{background:var(--chip);color:var(--muted);border-radius:20px;padding:3px 10px;font-size:11px}
+  .count{color:var(--muted);font-size:13px}
+  /* quiz */
+  .q-setup{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+  .field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+  .qbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .qmeta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;justify-content:space-between}
+  .qtext{font-size:17px;font-weight:600;margin-bottom:14px}
+  .opt{display:block;width:100%;text-align:right;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:12px 14px;margin-bottom:9px;cursor:pointer;font-size:15px}
+  .opt:hover{border-color:var(--accent)}
+  .opt.correct{border-color:var(--ok);background:#123424}
+  .opt.wrong{border-color:var(--bad);background:#3a1c1a}
+  .opt.disabled{cursor:default;opacity:.9}
+  .feedback{margin-top:10px;font-size:14px;padding:10px 12px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)}
+  .feedback a{color:var(--accent2);cursor:pointer;text-decoration:underline}
+  .progress{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-bottom:14px}
+  .progress i{display:block;height:100%;background:var(--accent);width:0}
+  .result{text-align:center;padding:30px 16px}
+  .score{font-size:46px;font-weight:800}
+  .pill{display:inline-block;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:600}
+  .pill.ok{background:#123424;color:var(--ok)}
+  .pill.pend{background:#3a2f14;color:var(--warn)}
+  .rowline{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+  label.lbl{font-size:13px;color:var(--muted);display:block;margin:8px 0 3px}
+  .note{background:#132a2a;border:1px solid #21403f;border-radius:10px;padding:12px 14px;font-size:13px;color:var(--muted);margin-bottom:16px}
+  .hidden{display:none}
+  /* welcome overlay */
+  #welcome{position:fixed;inset:0;background:linear-gradient(150deg,#0d1a1f,#12262b);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
+  .wcard{max-width:560px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px 26px;text-align:center}
+  .wcard h2{margin:0 0 4px;font-size:22px}
+  .wcard .sub{color:var(--accent2);font-size:14px;margin-bottom:2px}
+  .wcard .lect{color:var(--muted);font-size:14px;margin-bottom:18px}
+  .wcard .desc{color:var(--txt);font-size:15px;margin-bottom:16px}
+  .wlist{text-align:right;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:16px}
+  .wlist div{padding:5px 0;font-size:14px;color:var(--muted)}
+  .wlist b{color:var(--txt)}
+  .wnote{font-size:12px;color:var(--muted);background:#132a2a;border:1px solid #21403f;border-radius:10px;padding:10px 12px;margin-bottom:18px}
+  .header-btns{display:flex;gap:8px;align-items:center}
+  .icon-btn{background:rgba(255,255,255,.08);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+  @media(max-width:560px){.term-en{max-width:40%}}
+  /* print — clean sheet for exam use if computers are not allowed */
+  @media print{
+    body{background:#fff;color:#000}
+    header,nav,#welcome,.toolbar,#quiz,#manage,.header-btns,.term-head .term-en{color:#000}
+    nav,.toolbar,#welcome,#quiz,#manage,.header-btns{display:none !important}
+    #printTitle{display:block !important;font-size:18px;font-weight:700;margin:0 0 10px}
+    .card{border:1px solid #999;break-inside:avoid;margin-bottom:8px;padding:8px 10px}
+    .term-he{color:#000;font-size:15px}.term-en{color:#225;font-size:12px}
+    .more{display:block !important;color:#000;border-top:1px solid #ccc}
+    .chip{border:1px solid #ccc;color:#333}
+    a{color:#000;text-decoration:none}
+  }
+  #printTitle{display:none}
+</style>
+</head>
+<body>
+
+<!-- ============ WELCOME ============ -->
+<div id="welcome">
+  <div class="wcard">
+    <div class="sub">אוניברסיטת בר־אילן · לימודי תואר שני</div>
+    <h2>Industry 4.0 — יזמים ומנכ״לים משתפים</h2>
+    <div class="lect">מרצה: תא״ל (מיל׳) שגיב שרביט</div>
+    <div class="desc">כלי לימוד אישי לקורס: <b>מילון מושגים</b> ו<b>מאגר שאלות תרגול</b>, שנבנה בהדרגה לאורך הסמסטר ומשמש כחומר עזר במבחן (חומר פתוח).</div>
+    <div class="wlist">
+      <div><b>📖 מילון</b> — כל מונח עם הגדרה, הסבר, דוגמה ושיוך לשבוע. חיפוש וסינון מיידיים.</div>
+      <div><b>✍️ תרגול ומבחן</b> — שאלות רב־ברירה; טעות מפנה ישירות למושג במילון.</div>
+      <div><b>⚙️ ניהול</b> — הוספת מושגים ושאלות, אישור המרצה, וגיבוי (JSON).</div>
+    </div>
+    <div class="wnote">רק שאלות שאושרו על ידי המרצה נכללות בתרגול ובמבחן. הכלי אופליין — פועל בדפדפן ללא אינטרנט וללא בינה מלאכותית.</div>
+    <button class="btn" onclick="document.getElementById('welcome').style.display='none'">כניסה למילון ←</button>
+  </div>
+</div>
+
+<header>
+  <div class="wrap" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div>
+      <h1>מילון מושגים ותרגול — Industry 4.0</h1>
+      <p>יזמים ומנכ״לים משתפים · מרצה: תא״ל (מיל׳) שגיב שרביט · בר־אילן</p>
+    </div>
+    <div class="header-btns">
+      <button class="icon-btn" onclick="printSheet()">🖨 הדפסת המילון</button>
+      <button class="icon-btn" onclick="document.getElementById('welcome').style.display='flex'">ℹ מסך פתיחה</button>
+    </div>
+  </div>
+</header>
+<div id="printTitle" class="wrap">מילון מושגים — Industry 4.0 · יזמים ומנכ״לים משתפים · מרצה: תא״ל (מיל׳) שגיב שרביט</div>
+
+<nav class="wrap" style="max-width:1000px">
+  <button data-tab="glossary" class="active">מילון מושגים</button>
+  <button data-tab="quiz">תרגול ומבחן</button>
+  <button data-tab="manage">ניהול והוספה</button>
+</nav>
+
+<main class="wrap">
+  <!-- ============ GLOSSARY ============ -->
+  <section id="glossary">
+    <div class="toolbar">
+      <input id="gsearch" class="search" placeholder="חיפוש מונח (עברית/אנגלית/הגדרה)…">
+      <select id="gtopic"><option value="">כל הנושאים</option></select>
+      <span class="count" id="gcount"></span>
+    </div>
+    <div id="glist"></div>
+  </section>
+
+  <!-- ============ QUIZ ============ -->
+  <section id="quiz" class="hidden">
+    <div id="quizSetup">
+      <div class="note">רק שאלות שאושרו על ידי המרצה משתתפות בתרגול ובמבחן. שאלות ב"ממתין לאישור" אינן נכללות.</div>
+      <div class="q-setup">
+        <label class="field">מצב
+          <select id="qmode"><option value="practice">תרגול (משוב מיידי)</option><option value="exam">מבחן (ציון בסוף)</option></select>
+        </label>
+        <label class="field">נושא
+          <select id="qtopic"><option value="">כל הנושאים</option></select>
+        </label>
+        <label class="field">מספר שאלות
+          <select id="qnum"><option>5</option><option>10</option><option>20</option><option value="all">הכל</option></select>
+        </label>
+        <button class="btn" id="qstart">התחל</button>
+      </div>
+      <p class="count" id="qavail" style="margin-top:12px"></p>
+    </div>
+
+    <div id="quizRun" class="hidden">
+      <div class="progress"><i id="qbar"></i></div>
+      <div class="qbox">
+        <div class="qmeta"><span id="qidx"></span><span id="qtopiclbl"></span></div>
+        <div class="qtext" id="qtext"></div>
+        <div id="qopts"></div>
+        <div id="qfeed" class="feedback hidden"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:14px">
+        <button class="btn ghost sm" id="qquit">יציאה</button>
+        <button class="btn" id="qnext">הבא ←</button>
+      </div>
+    </div>
+
+    <div id="quizResult" class="hidden"></div>
+  </section>
+
+  <!-- ============ MANAGE ============ -->
+  <section id="manage" class="hidden">
+    <div class="note">כאן מוסיפים מושגים ושאלות, מאשרים שאלות ממתינות, ומגבים/מייצאים את הנתונים (JSON). הכול נשמר מקומית בדפדפן.</div>
+
+    <div class="card">
+      <b>גיבוי ושחזור</b>
+      <div class="toolbar" style="margin-top:10px">
+        <button class="btn sm" id="exportBtn">ייצוא JSON</button>
+        <button class="btn ghost sm" id="importBtn">ייבוא JSON</button>
+        <input type="file" id="importFile" accept="application/json" class="hidden">
+        <button class="btn ghost sm" id="resetBtn">איפוס לנתוני ברירת מחדל</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <b>אישור שאלות ממתינות</b> <span id="pendCount" class="count"></span>
+      <div id="pendList" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <b>הוספת מושג</b>
+      <label class="lbl">מונח בעברית</label><input id="t_he" style="width:100%">
+      <label class="lbl">מונח באנגלית</label><input id="t_en" style="width:100%" dir="ltr">
+      <label class="lbl">הגדרה תמציתית</label><input id="t_short" style="width:100%">
+      <label class="lbl">הסבר מורחב</label><textarea id="t_long" style="width:100%" rows="2"></textarea>
+      <label class="lbl">דוגמה יישומית</label><input id="t_ex" style="width:100%">
+      <label class="lbl">נושא</label><input id="t_topic" style="width:100%" placeholder="למשל: מבוא / הגדרות יסוד">
+      <label class="lbl">שבוע</label><input id="t_week" style="width:100%" value="1">
+      <div style="margin-top:10px"><button class="btn sm" id="addTerm">הוסף מושג</button></div>
+    </div>
+
+    <div class="card">
+      <b>הוספת שאלה</b>
+      <label class="lbl">קשור למושג</label><select id="q_term" style="width:100%"></select>
+      <label class="lbl">שאלה</label><textarea id="q_text" style="width:100%" rows="2"></textarea>
+      <label class="lbl">תשובה נכונה</label><input id="q_a0" style="width:100%">
+      <label class="lbl">מסיח 1</label><input id="q_a1" style="width:100%">
+      <label class="lbl">מסיח 2</label><input id="q_a2" style="width:100%">
+      <label class="lbl">מסיח 3</label><input id="q_a3" style="width:100%">
+      <label class="lbl">הסבר לתשובה</label><input id="q_exp" style="width:100%">
+      <div style="margin-top:10px"><button class="btn sm" id="addQ">הוסף שאלה (ממתינה לאישור)</button></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ============ SEED DATA (Lecture 1) ============ */
+const SEED = {
+ terms:[
+  {id:"industry40",he:"תעשייה 4.0",en:"Industry 4.0",topic:"מבוא / הגדרות יסוד",week:1,
+   short:"מהפכת התעשייה הרביעית — מערכות פיזיות־דיגיטליות מקושרות שמתקשרות זו עם זו.",
+   long:"ההבדל המהותי מאוטומציה של 'העולם הישן' אינו עצם האוטומציה (שקיימת עשורים) אלא הקישוריות: המערכות מדברות זו עם זו. מבוססת על IoT, אנליטיקת דאטה, גמישות ואוטונומיה. לפי המרצה — כבר הווה, וחלקה כבר עבר.",
+   ex:"מלגזות ורחפנים אוטונומיים במרלו״ג שמתאמים ביניהם; מכונית שמדווחת על תקלה ומזמנת טיפול."},
+  {id:"industry50",he:"תעשייה 5.0",en:"Industry 5.0",topic:"תעשייה 5.0",week:1,
+   short:"השלב הבא — העברת המיקוד מהטכנולוגיה לתפיסה הוליסטית: ממשק אדם־מכונה, חוסן וקיימות.",
+   long:"אם 4.0 היא הווה (וחלקה כבר עבר), 5.0 חלקה הווה ורובה עתיד. לא 'האדם במרכז' במובן HR, אלא ההבנה שבלי שינוי הרגלים ויכולות אנושיות — הטכנולוגיה של 4.0 לא תמצה את הפוטנציאל שלה.",
+   ex:"הטמעת מערכות WMS וליקוט קולי אצל עובד שצריך ללמוד לעבוד מולן."},
+  {id:"iot",he:"האינטרנט של הדברים",en:"Internet of Things (IoT)",topic:"מבוא / הגדרות יסוד",week:1,
+   short:"רשת של מכשירים פיזיים מחוברים שאוספים ומחליפים נתונים בזמן אמת.",
+   long:"אחת מאבני היסוד של תעשייה 4.0 — החיבור בין מערכות ומכונות שמאפשר להן 'לדבר' זו עם זו ולפעול על בסיס נתונים משותפים.",
+   ex:"חיישנים במכונית או במחסן שמדווחים סטטוס למערכת מרכזית."},
+  {id:"hmi",he:"ממשק אדם־מכונה",en:"Human-Machine Interface (HMI)",topic:"תעשייה 5.0",week:1,
+   short:"נקודת ההשקה בין העובד האנושי למערכת האוטומטית; ליבת תעשייה 5.0.",
+   long:"הטענה המרכזית של המרצה: הטכנולוגיה כבר קיימת (4.0), אך היא לא תגיע למיצוי בלי שהממשק בין האדם למכונה יעבוד נכון — כלומר שינוי הרגלים, יכולות, כלים והבנה אצל העובד.",
+   ex:"עובד שמלקט לפי הנחיות קוליות ממערכת WMS (Pick-by-Voice)."},
+  {id:"automation",he:"אוטומציה",en:"Automation",topic:"מבוא / הגדרות יסוד",week:1,
+   short:"ביצוע תהליכים על ידי מערכות ללא מגע יד אדם.",
+   long:"קיימת בעולם כבר עשורים (מחסנים אוטומטיים משנות ה־2000), אך המערכות הישנות 'לא דיברו' זו עם זו. מגבלה מרכזית: מתקשה עם פריטים בגדלים, צורות ומנחים משתנים.",
+   ex:"מחסן אוטומטי ותיק שלא התחבר למערכות חיצוניות."},
+  {id:"autonomy",he:"אוטונומיה",en:"Autonomy",topic:"אוטומציה מול אוטונומיה",week:1,
+   short:"יכולת של מערכת לפעול ולקבל החלטות בכוחות עצמה בסביבה משתנה.",
+   long:"מעבר לאוטומציה: לא רק ביצוע פעולה קבועה מראש אלא הסתגלות. דוגמה בולטת — להקות רחפנים שמסתדרות אלגוריתמית לפי מיקום הרחפנים השכנים, בלי מפעיל לכל רחפן.",
+   ex:"רכב אוטונומי; רחפן שמזהה מטרה ומחליט בזמן אמת על בסיס אישור שקיבל מראש."},
+  {id:"cobots",he:"רובוטים משתפים",en:"Collaborative Robots (Cobots)",topic:"תעשייה 5.0",week:1,
+   short:"רובוטים שעובדים בשיתוף לצד העובד האנושי בפס הייצור.",
+   long:"יתרון מרכזי: אין להם צרכים אנושיים — לא עייפים, לא צמאים, לא רעבים, לא שובתים ולא נעדרים. משלימים את העובד ולא בהכרח מחליפים אותו.",
+   ex:"זרוע רובוטית שמסייעת לעובד במשימת הרכבה."},
+  {id:"continuity",he:"רציפות תפקוד",en:"Business Continuity",topic:"עולם משובש / חוסן",week:1,
+   short:"יכולת הארגון להמשיך לתפקד גם בזמן משבר או שיבוש.",
+   long:"מונח שמקורו בעולם הצבאי ('רציפות התפקוד'), וכיום נפוץ בכל מרלו״ג ומפעל אזרחי (Continuity). אוטומציה מאפשרת רציפות תפקוד גם כשיש מחסור בכוח אדם.",
+   ex:"הפעלת מחסן אוטומטי כשאין מספיק עובדים זמינים."},
+  {id:"sustainability",he:"קיימות",en:"Sustainability",topic:"קיימות",week:1,
+   short:"שיקול מאקרו־כלכלי (ולא רק אקולוגי) בתכנון תעשייתי ולוגיסטי.",
+   long:"לפי המרצה — קיימות כבר לא 'nice to have' של חובבי טבע, אלא אירוע כלכלי עולמי. הנפט אוזל (כ־60–90 שנה) ולכן מדינות המפרץ משקיעות באנרגיה חלופית. עיקרון מנחה: 'Follow the money' — תעקוב אחרי הכסף.",
+   ex:"השקעות ענק של מדינות המפרץ במחקר ופיתוח אנרגיה חלופית."},
+  {id:"wms",he:"מערכת ניהול מחסן",en:"Warehouse Management System (WMS)",topic:"מערכות מרלו״ג",week:1,
+   short:"מערכת תוכנה שמנהלת ומכוונת את פעילות המחסן: ליקוט, אחסון ובקרה.",
+   long:"מכוונת את העובד או הרובוט לאיזה מעבר ללכת, מה לקחת וכמה, ומזהה טעויות (למשל דרך שקילת הפריט).",
+   ex:"מערכת שאומרת לעובד 'מעבר 6H, קח 2' ומתריעה אם לקח פריט שגוי."},
+  {id:"pickbyvoice",he:"ליקוט קולי",en:"Pick-by-Voice",topic:"מערכות מרלו״ג",week:1,
+   short:"שיטת ליקוט שבה העובד מקבל הוראות קוליות מ־WMS ומאשר קולית.",
+   long:"מאפשרת ליקוט 'ידיים חופשיות' — העובד שומע לאן ללכת ומה לקחת, ומאשר בקול. דוגמה מובהקת לממשק אדם־מכונה.",
+   ex:"'לך למעבר 6H, קרא את הקוד שאתה רואה, קח שתיים'."},
+  {id:"pickbylight",he:"ליקוט לפי אור",en:"Pick-by-Light",topic:"מערכות מרלו״ג",week:1,
+   short:"שיטת ליקוט שבה מנורות במדף מורות לעובד מהיכן לקחת וכמה.",
+   long:"העובד עומד מול עמדת ליקוט עם תאים; המחשב מדליק מנורה בתא הנכון. יעיל ומהיר, לא דורש קריאת ברקוד לכל פריט.",
+   ex:"ליקוט תרופות במחסן ממוכן לפי מנורות דולקות."},
+  {id:"pickbyvision",he:"ליקוט חזותי",en:"Pick-by-Vision",topic:"אימוץ טכנולוגי",week:1,
+   short:"ליקוט באמצעות משקפי מציאות רבודה שמציגים הנחיות לעובד.",
+   long:"הודגם בתערוכות מובילות (כמו CeMAT בגרמניה) לפני כעשור. דוגמה לטכנולוגיה מרשימה שכמעט לא הגיעה להטמעה מסחרית רחבה — בדומה ל־Google Glass. ממחישה שלא כל טכנולוגיה חוצה מ־R&D לשוק.",
+   ex:"משקפיים שמציגים 'קח 1 מכאן, 2 משם' תוך כדי מעבר במחסן."},
+  {id:"predictive",he:"אחזקה מונעת",en:"Predictive Maintenance",topic:"תעשייה 4.0",week:1,
+   short:"חיזוי תקלות מראש על בסיס נתונים, לפני שהן מתרחשות בפועל.",
+   long:"מאפשר לתחזק ציוד לפני כשל. דוגמה מהעולם הצרכני: רכב שמתריע 'אם לא תטפל בעוד X ק״מ תיווצר תקלה'.",
+   ex:"מכונית שמזהה בעיה מתפתחת ומודיעה עליה מראש."},
+  {id:"digitaltwin",he:"תאום דיגיטלי",en:"Digital Twin",topic:"אוצר מונחים / כללי",week:1,
+   short:"ייצוג דיגיטלי חי של מערכת או מוצר פיזי, המתעדכן בזמן אמת מנתוני המקור.",
+   long:"מונח יסוד באוצר המילים של תעשייה 4.0 (מופיע במפרט הקורס). מאפשר סימולציה, ניטור ואופטימיזציה של הנכס הפיזי דרך הכפיל הדיגיטלי שלו.",
+   ex:"מודל דיגיטלי של קו ייצור שמדמה שינויים לפני יישום בפועל."},
+  {id:"oee",he:"יעילות ציוד כוללת",en:"Overall Equipment Effectiveness (OEE)",topic:"אוצר מונחים / כללי",week:1,
+   short:"מדד תעשייתי המשקלל זמינות, ביצועים ואיכות של ציוד ייצור.",
+   long:"מדד סטנדרטי בעולם הייצור (מופיע במפרט הקורס). ערך של ~85% ומעלה נחשב 'world class'.",
+   ex:"קו ייצור עם זמינות גבוהה אך איכות נמוכה יקבל OEE נמוך."},
+  {id:"employercost",he:"עלות מעביד",en:"Employer Cost",topic:"כלכלה תעשייתית",week:1,
+   short:"העלות הכוללת של העסקת עובד — גבוהה ב־20–30% משכר הברוטו.",
+   long:"כוללת ביטוח לאומי, פנסיה, הבראה ועוד. משמשת בחישובי כדאיות אוטומציה — דוגמת 'הגומייה': חיסכון של כ־2 תקני כוח אדם ≈ 360 אלף ₪ בשנה.",
+   ex:"עובד פס ייצור בעלות מעביד של כ־180 אלף ₪ בשנה."},
+  {id:"supplychain",he:"שרשרת אספקה",en:"Supply Chain",topic:"שרשרת אספקה",week:1,
+   short:"הרשת המלאה של גורמים, תהליכים ומידע שמובילים מוצר מהספק ועד הלקוח.",
+   long:"נושא מרכזי בקורס. תעשייה 4.0/5.0 ו־AI משנים את אופן ניהול שרשרת האספקה — אוטומציה, נראות בזמן אמת והיערכות לשיבושים. המרצה יעסוק בכך בהרצאה הבאה.",
+   ex:"מיזוג מרכזים לוגיסטיים כדי לקצר ולייעל את שרשרת האספקה (פרויקט מר״ס)."},
+  {id:"disrupted",he:"עולם משובש",en:"Disruption",topic:"עולם משובש / חוסן",week:1,
+   short:"מציאות עולמית של שיבושים תכופים שמשנים את כללי המשחק.",
+   long:"לפי המרצה 'משבש' אינו מילה שלילית אלא ציון עובדה — כל שיבוש משנה את תפיסת העולם, ולעיתים מביא גם תיקונים ושיפורים. החל מהקורונה, ואחריה מלחמות וגאופוליטיקה.",
+   ex:"שיבושי הקורונה שהאיצו עבודה מהבית, זום ומשלוחים עד הבית."},
+  {id:"omnichannel",he:"קמעונאות רב־ערוצית",en:"Omnichannel",topic:"אסטרטגיה וסחר",week:1,
+   short:"אסטרטגיה המשלבת את כל ערוצי המכירה (חנות, אונליין, אפליקציה) לחוויה רציפה אחת.",
+   long:"הוזכרה בהקשר אסטרטגיה וסחר גלובלי. שרשרת האספקה צריכה לתמוך בלקוח שמזמין בכל ערוץ ומצפה לקבל בכל מקום.",
+   ex:"לקוח שמזמין אונליין ואוסף מהחנות, או מקבל עד הבית."},
+  {id:"lastmile",he:"משלוח קילומטר אחרון",en:"Last Mile",topic:"שרשרת אספקה",week:1,
+   short:"הקטע האחרון והיקר ביותר בשרשרת — מסירת המשלוח עד דלת הלקוח.",
+   long:"המסחר המקוון הפך את 'הקילומטר האחרון' לזירת תחרות מרכזית; הצרכן מצפה שהכול יגיע עד הבית ומהר.",
+   ex:"משלוח מחנות מקוונת עד דלת הבית באותו יום."},
+  {id:"ecommerce",he:"מסחר אלקטרוני",en:"E-commerce",topic:"אסטרטגיה וסחר",week:1,
+   short:"קנייה ומכירה של מוצרים ושירותים באינטרנט.",
+   long:"הפך את הצרכן ל'עצמאי' שמצפה שהכול יגיע עד הבית, ושינה את דרישות הלוגיסטיקה — מהירות, לאסט־מייל והחזרות.",
+   ex:"הזמנה מאמזון שמגיעה תוך ימים, כולל שירות בין־לאומי."},
+  {id:"droneswarm",he:"להקות רחפנים",en:"Drone Swarm",topic:"אוטומציה מול אוטונומיה",week:1,
+   short:"רחפנים רבים הפועלים יחד באופן מתואם על בסיס אלגוריתם, בלי מפעיל לכל רחפן.",
+   long:"דוגמה מובהקת לאוטונומיה — הרחפנים 'מדברים' זה עם זה ומסתדרים לפי מיקום שכניהם. הוצגו אזרחית במופעי יום העצמאות, ובעלי יישומים צבאיים מתקדמים.",
+   ex:"מופע רחפנים שיוצר צורות בשמיים לפי תיאום אלגוריתמי."},
+  {id:"radioshuttle",he:"רדיו־שאטל",en:"Radio Shuttle",topic:"מערכות מרלו״ג",week:1,
+   short:"מערכת אחסון אוטומטית שבה עגלה ממונעת (שאטל) נעה בתוך מדפי האחסון ומזיזה משטחים.",
+   long:"הוזכרה כדוגמה לטכנולוגיה שנכנסה למרלו״גים לפני כ־15–17 שנה ועדיין רלוונטית — לא כל טכנולוגיה מתיישנת מהר. קיימות גרסאות מתקדמות (מולטי־שאטל).",
+   ex:"שאטל שמאחסן ומוציא משטחים במחסן צפוף בלי מלגזן."},
+  {id:"kitting",he:"הרכבת קיטים",en:"Kitting",topic:"כלכלה תעשייתית",week:1,
+   short:"הרכבת 'ערכה' (קיט) מרכיבים שונים למשלוח אחד ללקוח — פס קיוט.",
+   long:"בפס ההרכבה אוספים כמה פריטים, אורזים יחד ושולחים. דוגמה לתהליך שבו ייעול קטן (כמו ליפוף גומייה) מצטבר לחיסכון גדול בכוח אדם.",
+   ex:"אריזת ערכת אביזרים בעולם הסלולר ושליחתה ללקוח."}
+ ],
+ questions:[
+  {id:"q1",term:"industry40",status:"approved",q:"מהו ההבדל המהותי בין תעשייה 4.0 לבין אוטומציה של 'העולם הישן'?",
+   opts:["תעשייה 4.0 מהירה יותר","המערכות מקושרות ומתקשרות זו עם זו","אין בה מגע יד אדם כלל","היא זולה יותר להקמה"],correct:1,
+   exp:"אוטומציה קיימת עשורים; החידוש של 4.0 הוא הקישוריות (IoT) בין המערכות."},
+  {id:"q2",term:"industry50",status:"approved",q:"מה מייחד את תעשייה 5.0 לעומת תעשייה 4.0?",
+   opts:["ויתור מוחלט על אוטומציה","מיקוד בטכנולוגיה בלבד","תפיסה הוליסטית: ממשק אדם־מכונה, חוסן וקיימות","שימוש ברובוטים בלבד"],correct:2,
+   exp:"5.0 מעבירה את המיקוד מהטכנולוגיה אל האדם, החוסן והקיימות."},
+  {id:"q3",term:"automation",status:"approved",q:"מדוע זרוע רובוטית עם מצלמת תלת־ממד אינה פותרת כל בעיית ליקוט?",
+   opts:["היא יקרה מדי","יש טרייד־אוף בין דיוק לקצב — היא מדייקת אך איטית","היא דורשת חיבור לאינטרנט","היא לא מזהה צבעים"],correct:1,
+   exp:"טכנולוגיית הזרוע מדייקת מאוד אך איטית; המחיר הוא קצב נמוך."},
+  {id:"q4",term:"sustainability",status:"approved",q:"לפי המרצה, מדוע מדינות המפרץ משקיעות הכי הרבה באנרגיה חלופית?",
+   opts:["בגלל לחץ אקטיביסטים","מסיבות אידאולוגיות של שמירת טבע","כי הנפט אוזל וזהו שיקול מאקרו־כלכלי הישרדותי","כדי להרשים את המערב"],correct:2,
+   exp:"'Follow the money' — כשהנפט ייגמר הם מאבדים את מקור הכוח, ולכן משקיעים בחלופה."},
+  {id:"q5",term:"pickbyvision",status:"approved",q:"מה ממחישה הדוגמה של ליקוט חזותי (Pick-by-Vision)?",
+   opts:["שכל טכנולוגיה חדשה מצליחה בשוק","שלא כל טכנולוגיה חוצה מ־R&D להטמעה מסחרית רחבה","שמשקפי מציאות רבודה זולים","שהמחסנים כבר אוטומטיים לחלוטין"],correct:1,
+   exp:"כמו Google Glass — טכנולוגיה מרשימה בתערוכה שכמעט לא הוטמעה בשטח."},
+  {id:"q6",term:"autonomy",status:"approved",q:"מדוע רכבים אוטונומיים עדיין אינם נפוצים, למרות שהטכנולוגיה קיימת?",
+   opts:["הם איטיים מדי","רגולציה, תשתית ואמון אדם־מכונה","הם יקרים מדי בלבד","אין בהם צורך"],correct:1,
+   exp:"מעבר לטכנולוגיה נדרשים חוקים ואתיקה, תשתית מדויקת, ואמון של אנשים במכונה."},
+  {id:"q7",term:"industry50",status:"approved",q:"נתוני האבטלה הנמוכים ב־OECD תומכים בטענת המרצה ש…",
+   opts:["אוטומציה אינה משפיעה על שוק העבודה","אוטומציה ו־AI מוחקים מקצועות אך גם יוצרים חדשים","אין יותר מקצועות שנעלמים","האבטלה בהכרח תעלה"],correct:1,
+   exp:"מקצועות נעלמים (סוכני נסיעות) אך נולדים חדשים (משפיעני רשת) — האתגר הוא לצמצם את הפער."},
+  {id:"q8",term:"employercost",status:"approved",q:"דוגמת 'הגומייה' בפס הייצור נועדה להמחיש בעיקר:",
+   opts:["חשיבות עיצוב המוצר","חיסכון בכוח אדם וכלכלת ייצור קלאסית","יתרון הרובוטים המשתפים","בעיית הקיימות"],correct:1,
+   exp:"חיסכון של כ־2 תקני כוח אדם ≈ 360 אלף ₪ בשנה — 'תעשייה וניהול' של העולם הישן, לפני הכנסת אוטומציה."},
+  {id:"q9",term:"cobots",status:"approved",q:"מהו יתרון מרכזי של רובוט משתף (cobot) על פני עובד אנושי בפס ייצור?",
+   opts:["יצירתיות גבוהה יותר","אין לו צרכים אנושיים (עייפות, הפסקות, היעדרויות)","הוא זול בכל מקרה","הוא לא דורש תחזוקה"],correct:1,
+   exp:"הרובוט לא עייף, לא שובת ולא נעדר — אך אין לו יצירתיות ופתרון בעיות אנושי."},
+  {id:"q10",term:"continuity",status:"approved",q:"המונח 'רציפות תפקוד' (Business Continuity) מקורו בעולם ה…",
+   opts:["הפיננסי","הצבאי, וכיום נפוץ בכל מרלו״ג אזרחי","הרפואי","האקדמי"],correct:1,
+   exp:"בצבא עסקו ב'רציפות תפקוד' עשרות שנים; היום זה מונח מרכזי בכל מפעל ומרלו״ג."},
+  {id:"q11",term:"iot",status:"pending",q:"האינטרנט של הדברים (IoT) מתייחס בעיקר ל…",
+   opts:["רשת מכשירים פיזיים מחוברים שאוספים ומחליפים נתונים","אתרי אינטרנט מסחריים","רשתות חברתיות","מחשוב ענן בלבד"],correct:0,
+   exp:"IoT = מכשירים פיזיים מחוברים. (שאלת דוגמה שממתינה לאישור המרצה.)"},
+  {id:"q12",term:"supplychain",status:"approved",q:"מהו הנושא המרכזי שהמרצה יעסוק בו בהרצאה הבאה, המתאר את כל המסלול מהספק ועד הלקוח?",
+   opts:["ממשק אדם־מכונה","שרשרת אספקה","אחזקה מונעת","יעילות ציוד כוללת"],correct:1,
+   exp:"שרשרת האספקה — והמרצה ידבר עליה בהרצאה הבאה, כולל השפעת תעשייה 4.0/5.0 ו־AI."},
+  {id:"q13",term:"disrupted",status:"approved",q:"לפי המרצה, המונח 'עולם משובש' מתאר:",
+   opts:["מציאות שלילית שיש להימנע ממנה","ציון עובדה — שיבושים תכופים ששינו את תפיסת העולם, לעיתים גם לטובה","כשל בשרשרת האספקה בלבד","תופעה זמנית של הקורונה"],correct:1,
+   exp:"המרצה הדגיש ש'משבש' אינו שיפוטי — שיבושים כמו הקורונה הביאו גם תיקונים (זום, מסחר מקוון)."},
+  {id:"q14",term:"lastmile",status:"approved",q:"מדוע המסחר המקוון (E-commerce) הפך את 'הקילומטר האחרון' לזירת תחרות מרכזית?",
+   opts:["כי הוא הוזיל את המשלוחים","כי הצרכן נהיה עצמאי ומצפה שהכול יגיע עד הבית ומהר","כי אין יותר חנויות פיזיות","כי המחסנים נסגרו"],correct:1,
+   exp:"הצרכן המקוון מצפה למשלוח מהיר עד הבית — מה שהפך את הלאסט־מייל לקריטי ויקר."}
+ ]
+};
+
+/* ============ STATE ============ */
+const KEY="ind40_glossary_v1";
+let DB=load();
+function load(){try{const s=localStorage.getItem(KEY);if(s)return JSON.parse(s);}catch(e){}return JSON.parse(JSON.stringify(SEED));}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){/* file:// may block storage — data stays in memory for this session */}}
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+
+/* ============ TABS ============ */
+$$("nav button").forEach(b=>b.onclick=()=>{
+  $$("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
+  ["glossary","quiz","manage"].forEach(id=>$("#"+id).classList.add("hidden"));
+  $("#"+b.dataset.tab).classList.remove("hidden");
+  if(b.dataset.tab==="manage")renderManage();
+});
+
+/* ============ GLOSSARY ============ */
+function topics(){return [...new Set(DB.terms.map(t=>t.topic))].sort();}
+function fillTopicSelects(){
+  const opts='<option value="">כל הנושאים</option>'+topics().map(t=>`<option>${t}</option>`).join("");
+  $("#gtopic").innerHTML=opts;$("#qtopic").innerHTML=opts;
+}
+function renderGlossary(){
+  const q=$("#gsearch").value.trim().toLowerCase(), tp=$("#gtopic").value;
+  const list=DB.terms.filter(t=>{
+    const hit=!q||[t.he,t.en,t.short,t.long,t.ex].join(" ").toLowerCase().includes(q);
+    return hit&&(!tp||t.topic===tp);
+  });
+  $("#gcount").textContent=`${list.length} מתוך ${DB.terms.length} מושגים`;
+  $("#glist").innerHTML=list.map(t=>`
+    <div class="card">
+      <div class="term-head" onclick="this.parentNode.querySelector('.more').classList.toggle('open')">
+        <span class="term-he">${t.he}</span><span class="term-en">${t.en}</span>
+      </div>
+      <div class="short">${t.short}</div>
+      <div class="more">
+        <p><b>הסבר:</b> ${t.long}</p>
+        <p><b>דוגמה:</b> ${t.ex}</p>
+        <div class="chips"><span class="chip">${t.topic}</span><span class="chip">שבוע ${t.week}</span></div>
+      </div>
+    </div>`).join("")||`<p class="count">לא נמצאו מושגים.</p>`;
+}
+$("#gsearch").oninput=renderGlossary;$("#gtopic").onchange=renderGlossary;
+
+/* ============ QUIZ ============ */
+let quiz=null;
+function approvedQs(){return DB.questions.filter(q=>q.status==="approved");}
+function updateAvail(){
+  const tp=$("#qtopic").value;
+  const n=approvedQs().filter(q=>!tp||termOf(q).topic===tp).length;
+  const pend=DB.questions.length-approvedQs().length;
+  $("#qavail").textContent=`זמינות לתרגול: ${n} שאלות מאושרות${pend?` · ${pend} ממתינות לאישור`:""}`;
+}
+function termOf(q){return DB.terms.find(t=>t.id===q.term)||{topic:"",he:""};}
+$("#qtopic").onchange=updateAvail;
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+$("#qstart").onclick=()=>{
+  const tp=$("#qtopic").value, mode=$("#qmode").value, numSel=$("#qnum").value;
+  let pool=approvedQs().filter(q=>!tp||termOf(q).topic===tp);
+  if(!pool.length){alert("אין שאלות מאושרות בנושא זה.");return;}
+  pool=shuffle(pool);
+  const num=numSel==="all"?pool.length:Math.min(+numSel,pool.length);
+  quiz={mode,items:pool.slice(0,num).map(q=>({q,order:shuffle(q.opts.map((o,i)=>i)),answer:null})),i:0};
+  $("#quizSetup").classList.add("hidden");$("#quizResult").classList.add("hidden");$("#quizRun").classList.remove("hidden");
+  renderQ();
+};
+function renderQ(){
+  const it=quiz.items[quiz.i], q=it.q;
+  $("#qbar").style.width=(quiz.i/quiz.items.length*100)+"%";
+  $("#qidx").textContent=`שאלה ${quiz.i+1} מתוך ${quiz.items.length}`;
+  $("#qtopiclbl").textContent=termOf(q).topic;
+  $("#qtext").textContent=q.q;
+  $("#qfeed").classList.add("hidden");
+  $("#qnext").textContent=quiz.i===quiz.items.length-1?"סיום":"הבא ←";
+  $("#qopts").innerHTML=it.order.map((oi,pos)=>`<button class="opt" data-oi="${oi}" data-pos="${pos}">${q.opts[oi]}</button>`).join("");
+  $$("#qopts .opt").forEach(b=>b.onclick=()=>choose(b));
+  if(it.answer!==null)lockAnswer(it);
+}
+function choose(btn){
+  const it=quiz.items[quiz.i];if(it.answer!==null)return;
+  it.answer=+btn.dataset.oi;
+  if(quiz.mode==="practice")lockAnswer(it);
+  else{ // exam: mark selected, no reveal
+    $$("#qopts .opt").forEach(b=>b.classList.add("disabled"));
+    btn.style.borderColor="var(--accent)";
+  }
+}
+function lockAnswer(it){
+  const q=it.q;
+  $$("#qopts .opt").forEach(b=>{
+    b.classList.add("disabled");
+    const oi=+b.dataset.oi;
+    if(oi===q.correct)b.classList.add("correct");
+    else if(oi===it.answer)b.classList.add("wrong");
+  });
+  const ok=it.answer===q.correct;
+  const t=termOf(q);
+  $("#qfeed").innerHTML=`<b style="color:${ok?'var(--ok)':'var(--bad)'}">${ok?"נכון!":"טעות."}</b> ${q.exp} `+
+    `<a onclick="gotoTerm('${q.term}')">↗ למושג: ${t.he}</a>`;
+  $("#qfeed").classList.remove("hidden");
+}
+$("#qnext").onclick=()=>{
+  const it=quiz.items[quiz.i];
+  if(it.answer===null){alert("בחר תשובה.");return;}
+  if(quiz.i<quiz.items.length-1){quiz.i++;renderQ();}else finishQuiz();
+};
+$("#qquit").onclick=()=>{$("#quizRun").classList.add("hidden");$("#quizSetup").classList.remove("hidden");updateAvail();};
+function finishQuiz(){
+  const correct=quiz.items.filter(it=>it.answer===it.q.correct).length, total=quiz.items.length;
+  const pct=Math.round(correct/total*100);
+  $("#quizRun").classList.add("hidden");
+  const review=quiz.items.map((it,n)=>{
+    const ok=it.answer===it.q.correct, t=termOf(it.q);
+    return `<div class="rowline"><span>${n+1}. ${it.q.q}</span>
+      <span class="pill ${ok?'ok':''}" style="${ok?'':'background:#3a1c1a;color:var(--bad)'}">${ok?'✓':'✗'}</span></div>
+      ${ok?'':`<div class="count" style="padding:2px 0 8px">התשובה: ${it.q.opts[it.q.correct]} · <a style="color:var(--accent2);cursor:pointer" onclick="gotoTerm('${it.q.term}')">${t.he}</a></div>`}`;
+  }).join("");
+  $("#quizResult").innerHTML=`<div class="result">
+     <div class="score" style="color:${pct>=80?'var(--ok)':pct>=60?'var(--warn)':'var(--bad)'}">${pct}%</div>
+     <p>${correct} מתוך ${total} נכונות · מצב ${quiz.mode==="exam"?"מבחן":"תרגול"}</p>
+     <button class="btn" onclick="backToSetup()">חזרה לתרגול</button></div>
+     <div class="card"><b>סקירת שאלות</b><div style="margin-top:8px">${review}</div></div>`;
+  $("#quizResult").classList.remove("hidden");
+}
+function backToSetup(){$("#quizResult").classList.add("hidden");$("#quizSetup").classList.remove("hidden");updateAvail();}
+function gotoTerm(id){
+  $$("nav button").forEach(x=>x.classList.remove("active"));
+  document.querySelector('nav [data-tab="glossary"]').classList.add("active");
+  ["glossary","quiz","manage"].forEach(s=>$("#"+s).classList.add("hidden"));
+  $("#glossary").classList.remove("hidden");
+  $("#gsearch").value="";$("#gtopic").value="";
+  const t=DB.terms.find(x=>x.id===id);renderGlossary();
+  setTimeout(()=>{
+    const cards=$$("#glist .card");
+    const idx=DB.terms.filter(x=>true).findIndex(x=>x.id===id);
+    const card=cards.find(c=>c.querySelector(".term-he").textContent===t.he);
+    if(card){card.querySelector(".more").classList.add("open");card.scrollIntoView({behavior:"smooth",block:"center"});card.style.outline="2px solid var(--accent)";}
+  },50);
+}
+
+/* ============ MANAGE ============ */
+function renderManage(){
+  const pend=DB.questions.filter(q=>q.status!=="approved");
+  $("#pendCount").textContent=pend.length?`(${pend.length} ממתינות)`:"(אין ממתינות)";
+  $("#pendList").innerHTML=pend.map(q=>`<div class="rowline">
+     <span>${q.q}<br><span class="count">✔ ${q.opts[q.correct]}</span></span>
+     <span style="display:flex;gap:6px"><button class="btn sm" onclick="approveQ('${q.id}')">אשר</button>
+     <button class="btn ghost sm" onclick="delQ('${q.id}')">מחק</button></span></div>`).join("")||`<p class="count">אין שאלות ממתינות.</p>`;
+  $("#q_term").innerHTML=DB.terms.map(t=>`<option value="${t.id}">${t.he} — ${t.en}</option>`).join("");
+}
+function approveQ(id){DB.questions.find(q=>q.id===id).status="approved";save();renderManage();updateAvail();}
+function delQ(id){DB.questions=DB.questions.filter(q=>q.id!==id);save();renderManage();updateAvail();}
+$("#addTerm").onclick=()=>{
+  const he=$("#t_he").value.trim();if(!he){alert("חסר מונח בעברית");return;}
+  DB.terms.push({id:"t"+Date.now(),he,en:$("#t_en").value.trim(),short:$("#t_short").value.trim(),
+    long:$("#t_long").value.trim(),ex:$("#t_ex").value.trim(),topic:$("#t_topic").value.trim()||"כללי",week:$("#t_week").value.trim()||"1"});
+  save();fillTopicSelects();renderGlossary();renderManage();
+  ["t_he","t_en","t_short","t_long","t_ex","t_topic"].forEach(id=>$("#"+id).value="");
+  alert("המושג נוסף.");
+};
+$("#addQ").onclick=()=>{
+  const q=$("#q_text").value.trim(),a0=$("#q_a0").value.trim();
+  if(!q||!a0){alert("חסרה שאלה או תשובה נכונה");return;}
+  DB.questions.push({id:"q"+Date.now(),term:$("#q_term").value,status:"pending",q,
+    opts:[a0,$("#q_a1").value.trim(),$("#q_a2").value.trim(),$("#q_a3").value.trim()],correct:0,exp:$("#q_exp").value.trim()});
+  save();renderManage();updateAvail();
+  ["q_text","q_a0","q_a1","q_a2","q_a3","q_exp"].forEach(id=>$("#"+id).value="");
+  alert("השאלה נוספה כ'ממתינה לאישור'.");
+};
+$("#exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="industry40-glossary-backup.json";a.click();
+};
+$("#importBtn").onclick=()=>$("#importFile").click();
+$("#importFile").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{DB=JSON.parse(r.result);save();fillTopicSelects();renderGlossary();renderManage();updateAvail();alert("יובא בהצלחה.");}catch(x){alert("קובץ לא תקין.");}};
+  r.readAsText(f);
+};
+$("#resetBtn").onclick=()=>{if(confirm("לאפס לנתוני ברירת המחדל? כל התוספות המקומיות יימחקו.")){DB=JSON.parse(JSON.stringify(SEED));save();fillTopicSelects();renderGlossary();updateAvail();renderManage();}};
+
+/* ============ PRINT ============ */
+function printSheet(){
+  // switch to glossary, clear filters, show all + expand every term, then print
+  $$("nav button").forEach(x=>x.classList.remove("active"));
+  document.querySelector('nav [data-tab="glossary"]').classList.add("active");
+  ["glossary","quiz","manage"].forEach(s=>$("#"+s).classList.add("hidden"));
+  $("#glossary").classList.remove("hidden");
+  $("#gsearch").value="";$("#gtopic").value="";renderGlossary();
+  setTimeout(()=>{$$("#glist .more").forEach(m=>m.classList.add("open"));window.print();},80);
+}
+
+/* ============ INIT ============ */
+fillTopicSelects();renderGlossary();updateAvail();
+</script>
+</body>
+</html>
