@@ -183,6 +183,23 @@
     <div class="note">כאן מוסיפים מושגים ושאלות, מאשרים שאלות ממתינות, ומגבים/מייצאים את הנתונים (JSON). הכול נשמר מקומית בדפדפן.</div>
 
     <div class="card">
+      <b>חיבור לענן (Google Sheets)</b>
+      <p class="count" style="margin:6px 0 0">כשמחוברים, כל הוספה נשמרת מרכזית בגיליון ומחכה לאישור המרצה. ללא חיבור — הכלי עובד אופליין ושומר מקומית בלבד.</p>
+      <label class="lbl">כתובת ה-Web App (URL)</label>
+      <input id="cloudUrl" style="width:100%" dir="ltr" placeholder="https://script.google.com/macros/s/.../exec">
+      <label class="lbl">השם שלך (נרשם ליד כל הוספה — כדי שהמרצה ידע מי תרם)</label>
+      <input id="userName" style="width:100%" placeholder="שם מלא">
+      <label class="lbl">קוד מנהל (רק למי שמאשר שאלות — לא חובה)</label>
+      <input id="adminKey" style="width:100%" type="password" placeholder="השאירו ריק אם אינכם המאשרים">
+      <div class="toolbar" style="margin-top:10px">
+        <button class="btn sm" id="cloudSave">שמור וסנכרן</button>
+        <button class="btn ghost sm" id="cloudRefresh">רענן מהענן</button>
+        <button class="btn ghost sm" id="cloudClear">נתק</button>
+      </div>
+      <p class="count" id="cloudStatus" style="margin:8px 0 0">מצב: לא מחובר (עובד מקומית)</p>
+    </div>
+
+    <div class="card">
       <b>גיבוי ושחזור</b>
       <div class="toolbar" style="margin-top:10px">
         <button class="btn sm" id="exportBtn">ייצוא JSON</button>
@@ -381,6 +398,51 @@ function load(){try{const s=localStorage.getItem(KEY);if(s)return JSON.parse(s);
 function save(){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){/* file:// may block storage — data stays in memory for this session */}}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
+/* ============ CLOUD (Google Sheets via Apps Script) ============ */
+const CKEY="ind40_cloud_url", AKEY="ind40_admin_key", NKEY="ind40_user_name";
+let CLOUD=lsGet(CKEY), ADMIN=lsGet(AKEY), UNAME=lsGet(NKEY);
+function lsGet(k){try{return localStorage.getItem(k)||"";}catch(e){return "";}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+function cloudStatus(msg,ok){
+  const el=$("#cloudStatus");if(!el)return;
+  el.textContent="מצב: "+msg;
+  el.style.color = ok===false?"var(--bad)" : ok?"var(--ok)" : "var(--muted)";
+}
+async function cloudGet(){
+  const r=await fetch(CLOUD,{method:"GET"});
+  const j=await r.json();
+  if(!j.ok)throw new Error(j.error||"שגיאה לא ידועה");
+  return j;
+}
+async function cloudPost(payload){
+  // text/plain avoids a CORS preflight, which Apps Script does not answer
+  const r=await fetch(CLOUD,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
+  const j=await r.json();
+  if(!j.ok)throw new Error(j.error||"שגיאה לא ידועה");
+  return j;
+}
+/** SEED = בסיס אופליין; הענן מתווסף מעליו (ומנצח בהתנגשות מזהים) */
+async function syncCloud(){
+  if(!CLOUD){cloudStatus("לא מחובר (עובד מקומית)");return;}
+  cloudStatus("מסנכרן…");
+  try{
+    const j=await cloudGet();
+    const tm=new Map();
+    SEED.terms.forEach(t=>tm.set(t.id,Object.assign({},t,{status:"approved",origin:"seed"})));
+    (j.terms||[]).forEach(t=>tm.set(String(t.id),Object.assign({},t,{origin:"cloud"})));
+    const qm=new Map();
+    SEED.questions.forEach(q=>qm.set(q.id,Object.assign({},q,{origin:"seed"})));
+    (j.questions||[]).forEach(q=>qm.set(String(q.id),Object.assign({},q,{origin:"cloud"})));
+    DB.terms=[...tm.values()];DB.questions=[...qm.values()];
+    save();fillTopicSelects();renderGlossary();updateAvail();
+    if(!$("#manage").classList.contains("hidden"))renderManage();
+    const pend=DB.questions.filter(q=>q.status!=="approved").length;
+    cloudStatus(`מחובר · ${DB.terms.length} מושגים, ${DB.questions.length} שאלות (${pend} ממתינות)`,true);
+  }catch(e){
+    cloudStatus("שגיאת סנכרון — "+e.message+" (ממשיך לעבוד מקומית)",false);
+  }
+}
+
 /* ============ TABS ============ */
 $$("nav button").forEach(b=>b.onclick=()=>{
   $$("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
@@ -411,7 +473,7 @@ function renderGlossary(){
       <div class="more">
         <p><b>הסבר:</b> ${t.long}</p>
         <p><b>דוגמה:</b> ${t.ex}</p>
-        <div class="chips"><span class="chip">${t.topic}</span><span class="chip">שבוע ${t.week}</span></div>
+        <div class="chips"><span class="chip">${t.topic}</span><span class="chip">שבוע ${t.week}</span>${t.status==="pending"?'<span class="chip" style="background:#3a2f14;color:var(--warn)">ממתין לאישור</span>':''}</div>
       </div>
     </div>`).join("")||`<p class="count">לא נמצאו מושגים.</p>`;
 }
@@ -524,24 +586,62 @@ function renderManage(){
      <button class="btn ghost sm" onclick="delQ('${q.id}')">מחק</button></span></div>`).join("")||`<p class="count">אין שאלות ממתינות.</p>`;
   $("#q_term").innerHTML=DB.terms.map(t=>`<option value="${t.id}">${t.he} — ${t.en}</option>`).join("");
 }
-function approveQ(id){DB.questions.find(q=>q.id===id).status="approved";save();renderManage();updateAvail();}
-function delQ(id){DB.questions=DB.questions.filter(q=>q.id!==id);save();renderManage();updateAvail();}
-$("#addTerm").onclick=()=>{
+async function approveQ(id){
+  const q=DB.questions.find(x=>x.id===id);if(!q)return;
+  if(q.origin==="cloud"){
+    if(!ADMIN){alert("נדרש קוד מנהל כדי לאשר. הזינו אותו באזור 'חיבור לענן'.\n(לחלופין: שנו את העמודה status ל'מאושר' ישירות בגיליון.)");return;}
+    try{await cloudPost({action:"setStatus",type:"question",id,status:"approved",adminKey:ADMIN});await syncCloud();}
+    catch(e){alert("האישור נכשל: "+e.message);}
+    return;
+  }
+  q.status="approved";save();renderManage();updateAvail();
+}
+function delQ(id){
+  const q=DB.questions.find(x=>x.id===id);
+  if(q&&q.origin==="cloud"){alert("זו שאלה מהענן — כדי למחוק, מחקו את השורה המתאימה בגיליון Google Sheets.");return;}
+  DB.questions=DB.questions.filter(x=>x.id!==id);save();renderManage();updateAvail();
+}
+$("#addTerm").onclick=async()=>{
   const he=$("#t_he").value.trim();if(!he){alert("חסר מונח בעברית");return;}
-  DB.terms.push({id:"t"+Date.now(),he,en:$("#t_en").value.trim(),short:$("#t_short").value.trim(),
-    long:$("#t_long").value.trim(),ex:$("#t_ex").value.trim(),topic:$("#t_topic").value.trim()||"כללי",week:$("#t_week").value.trim()||"1"});
-  save();fillTopicSelects();renderGlossary();renderManage();
+  const data={he,en:$("#t_en").value.trim(),short:$("#t_short").value.trim(),long:$("#t_long").value.trim(),
+    ex:$("#t_ex").value.trim(),topic:$("#t_topic").value.trim()||"כללי",week:$("#t_week").value.trim()||"1"};
+  if(CLOUD){
+    try{await cloudPost({action:"addTerm",data,addedBy:UNAME});await syncCloud();alert("המושג נשלח לגיליון וממתין לאישור.");}
+    catch(e){alert("השליחה לענן נכשלה: "+e.message);return;}
+  }else{
+    DB.terms.push(Object.assign({id:"t"+Date.now(),status:"approved",origin:"local"},data));
+    save();fillTopicSelects();renderGlossary();alert("המושג נוסף (מקומית בלבד — לא מחובר לענן).");
+  }
+  renderManage();
   ["t_he","t_en","t_short","t_long","t_ex","t_topic"].forEach(id=>$("#"+id).value="");
-  alert("המושג נוסף.");
 };
-$("#addQ").onclick=()=>{
-  const q=$("#q_text").value.trim(),a0=$("#q_a0").value.trim();
-  if(!q||!a0){alert("חסרה שאלה או תשובה נכונה");return;}
-  DB.questions.push({id:"q"+Date.now(),term:$("#q_term").value,status:"pending",q,
-    opts:[a0,$("#q_a1").value.trim(),$("#q_a2").value.trim(),$("#q_a3").value.trim()],correct:0,exp:$("#q_exp").value.trim()});
-  save();renderManage();updateAvail();
+$("#addQ").onclick=async()=>{
+  const qt=$("#q_text").value.trim(),a0=$("#q_a0").value.trim();
+  if(!qt||!a0){alert("חסרה שאלה או תשובה נכונה");return;}
+  const data={term:$("#q_term").value,q:qt,
+    opts:[a0,$("#q_a1").value.trim(),$("#q_a2").value.trim(),$("#q_a3").value.trim()],correct:0,exp:$("#q_exp").value.trim()};
+  if(CLOUD){
+    try{await cloudPost({action:"addQuestion",data,addedBy:UNAME});await syncCloud();alert("השאלה נשלחה לגיליון וממתינה לאישור המרצה.");}
+    catch(e){alert("השליחה לענן נכשלה: "+e.message);return;}
+  }else{
+    DB.questions.push(Object.assign({id:"q"+Date.now(),status:"pending",origin:"local"},data));
+    save();alert("השאלה נוספה כ'ממתינה' (מקומית בלבד — לא מחובר לענן).");
+  }
+  renderManage();updateAvail();
   ["q_text","q_a0","q_a1","q_a2","q_a3","q_exp"].forEach(id=>$("#"+id).value="");
-  alert("השאלה נוספה כ'ממתינה לאישור'.");
+};
+$("#cloudSave").onclick=async()=>{
+  CLOUD=$("#cloudUrl").value.trim();ADMIN=$("#adminKey").value.trim();UNAME=$("#userName").value.trim();
+  lsSet(CKEY,CLOUD);lsSet(AKEY,ADMIN);lsSet(NKEY,UNAME);
+  await syncCloud();
+};
+$("#cloudRefresh").onclick=syncCloud;
+$("#cloudClear").onclick=()=>{
+  CLOUD="";ADMIN="";
+  lsSet(CKEY,"");lsSet(AKEY,"");
+  $("#cloudUrl").value="";$("#adminKey").value="";
+  DB=JSON.parse(JSON.stringify(SEED));save();fillTopicSelects();renderGlossary();updateAvail();renderManage();
+  cloudStatus("נותק (עובד מקומית)");
 };
 $("#exportBtn").onclick=()=>{
   const blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"});
@@ -569,6 +669,8 @@ function printSheet(){
 
 /* ============ INIT ============ */
 fillTopicSelects();renderGlossary();updateAvail();
+$("#cloudUrl").value=CLOUD;$("#adminKey").value=ADMIN;$("#userName").value=UNAME;
+if(CLOUD)syncCloud(); else cloudStatus("לא מחובר (עובד מקומית)");
 </script>
 </body>
 </html>
