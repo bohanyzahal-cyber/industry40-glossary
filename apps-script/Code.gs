@@ -13,12 +13,13 @@ const STATUS_APPROVED = 'מאושר';
 const TERM_HEADERS = ['id', 'he', 'en', 'short', 'long', 'ex', 'topic', 'week', 'status', 'addedBy', 'timestamp'];
 const QUESTION_HEADERS = ['id', 'term', 'q', 'opt1', 'opt2', 'opt3', 'opt4', 'correct', 'exp', 'status', 'addedBy', 'timestamp'];
 
-/** הרץ פעם אחת מהתפריט כדי ליצור את הגיליונות והכותרות */
+/** הרץ פעם אחת כדי ליצור את הגיליונות והכותרות.
+ *  (בלי alert — הרצה מתוך העורך אינה תומכת בחלונות UI ועלולה להיתקע) */
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureSheet_(ss, SHEET_TERMS, TERM_HEADERS);
   ensureSheet_(ss, SHEET_QUESTIONS, QUESTION_HEADERS);
-  SpreadsheetApp.getUi().alert('הגיליונות מוכנים. עכשיו: Deploy → New deployment → Web app.');
+  Logger.log('הגיליונות מוכנים: %s, %s. המשך ל-Deploy → New deployment → Web app.', SHEET_TERMS, SHEET_QUESTIONS);
 }
 
 function ensureSheet_(ss, name, headers) {
