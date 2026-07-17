@@ -400,7 +400,11 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 /* ============ CLOUD (Google Sheets via Apps Script) ============ */
 const CKEY="ind40_cloud_url", AKEY="ind40_admin_key", NKEY="ind40_user_name";
-let CLOUD=lsGet(CKEY), ADMIN=lsGet(AKEY), UNAME=lsGet(NKEY);
+// כתובת ברירת מחדל של הגיליון המשותף — כדי שכל מי שפותח יהיה מחובר אוטומטית.
+// (רק קריאה והוספת "ממתין" פתוחות; אישור מוגן בקוד מנהל.)
+const DEFAULT_CLOUD="https://script.google.com/macros/s/AKfycbyVQElGiLbG_K7WjP4n65i5QFG6plMyofwDg2zfcjk9XEXOVQHvZaoXhJvnpTRBCnmG/exec";
+let _savedUrl=lsGet(CKEY);
+let CLOUD=_savedUrl==="__off__"?"":(_savedUrl||DEFAULT_CLOUD), ADMIN=lsGet(AKEY), UNAME=lsGet(NKEY);
 function lsGet(k){try{return localStorage.getItem(k)||"";}catch(e){return "";}}
 function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 function cloudStatus(msg,ok){
@@ -638,7 +642,7 @@ $("#cloudSave").onclick=async()=>{
 $("#cloudRefresh").onclick=syncCloud;
 $("#cloudClear").onclick=()=>{
   CLOUD="";ADMIN="";
-  lsSet(CKEY,"");lsSet(AKEY,"");
+  lsSet(CKEY,"__off__");lsSet(AKEY,"");
   $("#cloudUrl").value="";$("#adminKey").value="";
   DB=JSON.parse(JSON.stringify(SEED));save();fillTopicSelects();renderGlossary();updateAvail();renderManage();
   cloudStatus("נותק (עובד מקומית)");
