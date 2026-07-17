@@ -230,6 +230,10 @@
         <button class="btn ghost sm" id="cloudClear">נתק</button>
       </div>
       <p class="count" id="cloudStatus" style="margin:8px 0 0">מצב: לא מחובר (עובד מקומית)</p>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)">
+        <button class="btn ghost sm" id="seedUpload">⬆ טען נתוני בסיס לגיליון (חד-פעמי)</button>
+        <p class="count" style="margin:6px 0 0">דורש קוד מנהל. מעלה את מושגי ושאלות הבסיס לגיליון כדי שהמרצה יוכל לנהל אותם. מדלג על פריטים שכבר קיימים.</p>
+      </div>
     </div>
 
     <div class="card" style="display:none">
@@ -695,6 +699,17 @@ $("#cloudSave").onclick=async()=>{
   await syncCloud();
 };
 $("#cloudRefresh").onclick=syncCloud;
+$("#seedUpload").onclick=async()=>{
+  if(!CLOUD){alert("אין חיבור לענן. שמרו קודם את כתובת ה-Web App.");return;}
+  ADMIN=$("#adminKey").value.trim()||ADMIN;
+  if(!ADMIN){alert("נדרש קוד מנהל כדי לטעון את הבסיס. הזינו אותו למעלה.");return;}
+  if(!confirm(`לטעון ${SEED.terms.length} מושגים ו-${SEED.questions.length} שאלות לגיליון (מסומנים 'מאושר')?\nפריטים שכבר קיימים לפי מזהה יידלגו.`))return;
+  try{
+    const r=await cloudPost({action:"importSeed",adminKey:ADMIN,status:"approved",terms:SEED.terms,questions:SEED.questions});
+    await syncCloud();
+    alert(`נטענו ${r.added} פריטים חדשים לגיליון. עכשיו הם מנוהלים דרך הגיליון.`);
+  }catch(e){alert("הטעינה נכשלה: "+e.message);}
+};
 $("#cloudClear").onclick=()=>{
   CLOUD="";ADMIN="";
   lsSet(CKEY,"__off__");lsSet(AKEY,"");

@@ -142,6 +142,33 @@ function doPost(e) {
       return json_({ ok: false, error: 'מזהה לא נמצא' });
     }
 
+    /** טעינה חד-פעמית של נתוני הבסיס לגיליון (מדלג על מזהים קיימים) — מוגן בקוד מנהל */
+    if (action === 'importSeed') {
+      const key = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+      if (!key || body.adminKey !== key) return json_({ ok: false, error: 'קוד מנהל שגוי' });
+      const status = body.status === 'pending' ? STATUS_PENDING : STATUS_APPROVED;
+      const tSheet = ensureSheet_(ss, SHEET_TERMS, TERM_HEADERS);
+      const qSheet = ensureSheet_(ss, SHEET_QUESTIONS, QUESTION_HEADERS);
+      const haveT = {}, haveQ = {};
+      rows_(SHEET_TERMS).forEach(function (r) { haveT[String(r.id)] = true; });
+      rows_(SHEET_QUESTIONS).forEach(function (r) { haveQ[String(r.id)] = true; });
+      let added = 0;
+      (body.terms || []).forEach(function (t) {
+        if (haveT[String(t.id)]) return;
+        tSheet.appendRow([t.id, t.he, t.en || '', t.short || '', t.long || '', t.ex || '',
+          t.topic || 'כללי', t.week || 1, status, 'בסיס', new Date()]);
+        added++;
+      });
+      (body.questions || []).forEach(function (q) {
+        if (haveQ[String(q.id)]) return;
+        const o = q.opts || [];
+        qSheet.appendRow([q.id, q.term || '', q.q, o[0] || '', o[1] || '', o[2] || '', o[3] || '',
+          Number(q.correct) || 0, q.exp || '', status, 'בסיס', new Date()]);
+        added++;
+      });
+      return json_({ ok: true, added: added });
+    }
+
     return json_({ ok: false, error: 'פעולה לא מוכרת' });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
