@@ -76,7 +76,39 @@
   .wnote{font-size:12px;color:var(--muted);background:#132a2a;border:1px solid #21403f;border-radius:10px;padding:10px 12px;margin-bottom:18px}
   .header-btns{display:flex;gap:8px;align-items:center}
   .icon-btn{background:rgba(255,255,255,.08);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
-  @media(max-width:560px){.term-en{max-width:40%}}
+  /* ===== מובייל / טלפון ===== */
+  @media(max-width:600px){
+    header{padding:14px 14px}
+    header h1{font-size:17px}
+    header p{font-size:11px}
+    .header-btns{width:100%;justify-content:flex-start}
+    .icon-btn{font-size:11px;padding:6px 9px}
+    nav button{font-size:13px;padding:12px 4px}
+    main{padding:14px 0 50px}
+    /* מונח באנגלית יורד לשורה נפרדת מתחת לעברית */
+    .term-head{flex-wrap:wrap;gap:2px}
+    .term-he{font-size:16px}
+    .term-en{max-width:100%;text-align:right;flex-basis:100%}
+    .short{font-size:14px}
+    /* טפסים: 16px מונע זום אוטומטי ב-iPhone בעת הקלדה */
+    input,select,textarea{font-size:16px}
+    .search{min-width:100%;flex-basis:100%}
+    .toolbar{gap:8px}
+    .q-setup{gap:10px}
+    .q-setup .field,.q-setup .btn{flex:1 1 100%}
+    .q-setup select{width:100%}
+    .qbox{padding:14px}
+    .qtext{font-size:16px}
+    .opt{font-size:15px;padding:13px 14px}
+    .score{font-size:38px}
+    .wcard{padding:22px 18px}
+    .wcard h2{font-size:19px}
+    .rowline{flex-wrap:wrap}
+  }
+  @media(max-width:380px){
+    nav button{font-size:12px;padding:11px 2px}
+    header h1{font-size:15px}
+  }
   /* print — clean sheet for exam use if computers are not allowed */
   @media print{
     body{background:#fff;color:#000}
