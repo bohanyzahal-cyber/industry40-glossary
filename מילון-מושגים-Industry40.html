@@ -273,6 +273,25 @@
   </section>
 </main>
 
+<!-- ============ APPROVAL MODE (למרצה) ============ -->
+<div id="approveView" class="hidden">
+  <div class="wrap" style="padding:22px 16px;max-width:760px">
+    <h1 style="margin:0;font-size:21px">מצב אישור — Industry 4.0</h1>
+    <p class="count" style="margin:4px 0 18px">אישור מושגים ושאלות שהוצעו על ידי הסטודנטים · למרצה / למנהל הקורס</p>
+    <div id="approveKeyBox" class="card">
+      <b>כניסת מנהל</b>
+      <label class="lbl">קוד מנהל</label>
+      <input id="approveKey" type="password" style="width:100%" placeholder="הזינו את קוד המנהל">
+      <div style="margin-top:10px"><button class="btn sm" id="approveLogin">כניסה</button></div>
+      <p class="count" id="approveKeyMsg" style="margin-top:8px"></p>
+    </div>
+    <div id="approveBody" class="hidden">
+      <div class="toolbar"><button class="btn ghost sm" id="approveRefresh">רענן</button><span class="count" id="approveCount"></span></div>
+      <div id="approveList"></div>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============ SEED DATA (Lecture 1) ============ */
 const SEED = {
@@ -473,8 +492,10 @@ async function syncCloud(){
     DB.terms=[...tm.values()];DB.questions=[...qm.values()];
     save();fillTopicSelects();renderGlossary();updateAvail();
     if(!$("#manage").classList.contains("hidden"))renderManage();
-    const pend=DB.questions.filter(q=>q.status!=="approved").length;
-    cloudStatus(`מחובר · ${DB.terms.length} מושגים, ${DB.questions.length} שאלות (${pend} ממתינות)`,true);
+    const pend=DB.questions.filter(q=>q.status==="pending").length;
+    const nT=DB.terms.filter(t=>t.status!=="rejected").length;
+    const nQ=DB.questions.filter(q=>q.status!=="rejected").length;
+    cloudStatus(`מחובר · ${nT} מושגים, ${nQ} שאלות (${pend} ממתינות)`,true);
   }catch(e){
     cloudStatus("שגיאת סנכרון — "+e.message+" (ממשיך לעבוד מקומית)",false);
   }
@@ -497,6 +518,7 @@ function fillTopicSelects(){
 function renderGlossary(){
   const q=$("#gsearch").value.trim().toLowerCase(), tp=$("#gtopic").value;
   const list=DB.terms.filter(t=>{
+    if(t.status==="rejected")return false;
     const hit=!q||[t.he,t.en,t.short,t.long,t.ex].join(" ").toLowerCase().includes(q);
     return hit&&(!tp||t.topic===tp);
   });
@@ -522,7 +544,7 @@ function approvedQs(){return DB.questions.filter(q=>q.status==="approved");}
 function updateAvail(){
   const tp=$("#qtopic").value;
   const n=approvedQs().filter(q=>!tp||termOf(q).topic===tp).length;
-  const pend=DB.questions.length-approvedQs().length;
+  const pend=DB.questions.filter(q=>q.status==="pending").length;
   $("#qavail").textContent=`זמינות לתרגול: ${n} שאלות מאושרות${pend?` · ${pend} ממתינות לאישור`:""}`;
 }
 function termOf(q){return DB.terms.find(t=>t.id===q.term)||{topic:"",he:""};}
@@ -615,7 +637,7 @@ function gotoTerm(id){
 
 /* ============ MANAGE ============ */
 function renderManage(){
-  const pend=DB.questions.filter(q=>q.status!=="approved");
+  const pend=DB.questions.filter(q=>q.status==="pending");
   $("#pendCount").textContent=pend.length?`(${pend.length} ממתינות)`:"(אין ממתינות)";
   $("#pendList").innerHTML=pend.map(q=>`<div class="rowline">
      <span>${q.q}<br><span class="count">✔ ${q.opts[q.correct]}</span></span>
@@ -704,10 +726,82 @@ function printSheet(){
   setTimeout(()=>{$$("#glist .more").forEach(m=>m.classList.add("open"));window.print();},80);
 }
 
+/* ============ APPROVAL MODE ============ */
+function isApproveMode(){return /approve/i.test(location.search)||/approve/i.test(location.hash);}
+async function pingKey(){
+  try{await cloudPost({action:"setStatus",type:"question",id:"__ping__",status:"approved",adminKey:ADMIN});return true;}
+  catch(e){return e.message.indexOf("מנהל")===-1;} // "קוד מנהל שגוי" => key bad; "מזהה לא נמצא" => key ok
+}
+function initApprove(){
+  $("#welcome").style.display="none";
+  document.querySelector("header").style.display="none";
+  document.querySelector("nav").style.display="none";
+  document.querySelector("main").style.display="none";
+  $("#printTitle").style.display="none";
+  $("#approveView").classList.remove("hidden");
+  $("#approveLogin").onclick=approveLogin;
+  $("#approveRefresh").onclick=loadApproveQueue;
+  $("#approveKey").addEventListener("keydown",e=>{if(e.key==="Enter")approveLogin();});
+  if(ADMIN){$("#approveKey").value=ADMIN;approveLogin();}
+}
+async function approveLogin(){
+  ADMIN=$("#approveKey").value.trim();
+  const msg=$("#approveKeyMsg");
+  if(!ADMIN){msg.textContent="נא להזין קוד.";msg.style.color="var(--bad)";return;}
+  msg.textContent="בודק…";msg.style.color="var(--muted)";
+  const ok=await pingKey();
+  if(!ok){msg.textContent="קוד מנהל שגוי.";msg.style.color="var(--bad)";return;}
+  lsSet(AKEY,ADMIN);
+  $("#approveKeyBox").classList.add("hidden");
+  $("#approveBody").classList.remove("hidden");
+  loadApproveQueue();
+}
+async function loadApproveQueue(){
+  $("#approveCount").textContent="טוען…";
+  await syncCloud();
+  const pend=[].concat(
+    DB.terms.filter(t=>t.status==="pending").map(t=>({kind:"term",item:t})),
+    DB.questions.filter(q=>q.status==="pending").map(q=>({kind:"question",item:q}))
+  );
+  $("#approveCount").textContent=pend.length?`${pend.length} ממתינים לאישור`:"אין פריטים ממתינים 🎉";
+  $("#approveList").innerHTML=pend.map(approveCard).join("");
+  $$("#approveList [data-app]").forEach(b=>b.onclick=()=>{
+    b.disabled=true;doApprove(b.dataset.type,b.dataset.id,b.dataset.app);
+  });
+}
+function approveCard(x){
+  const it=x.item;
+  const who=it.addedBy?`<span class="chip">הוצע ע״י: ${it.addedBy}</span>`:"";
+  let inner;
+  if(x.kind==="question"){
+    const t=DB.terms.find(z=>z.id===it.term);
+    inner=`<div class="term-he" style="font-size:16px">${it.q}</div>
+      <div style="margin:10px 0">${it.opts.map((o,i)=>`<div class="opt disabled ${i===it.correct?'correct':''}">${o}${i===it.correct?' ✔':''}</div>`).join("")}</div>
+      ${it.exp?`<p class="count">${it.exp}</p>`:""}
+      <div class="chips"><span class="chip">שאלה</span>${t?`<span class="chip">מושג: ${t.he}</span>`:""}${who}</div>`;
+  }else{
+    inner=`<div class="term-head"><span class="term-he">${it.he}</span><span class="term-en">${it.en||""}</span></div>
+      <div class="short">${it.short||""}</div>
+      ${it.long?`<p class="count" style="margin-top:8px">${it.long}</p>`:""}
+      ${it.ex?`<p class="count"><b>דוגמה:</b> ${it.ex}</p>`:""}
+      <div class="chips"><span class="chip">מושג</span><span class="chip">${it.topic||""}</span>${who}</div>`;
+  }
+  return `<div class="card">${inner}
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn sm" data-app="approved" data-type="${x.kind}" data-id="${it.id}">✔ אשר</button>
+      <button class="btn ghost sm" data-app="rejected" data-type="${x.kind}" data-id="${it.id}">✖ דחה</button>
+    </div></div>`;
+}
+async function doApprove(type,id,status){
+  try{await cloudPost({action:"setStatus",type,id,status,adminKey:ADMIN});await loadApproveQueue();}
+  catch(e){alert("הפעולה נכשלה: "+e.message);loadApproveQueue();}
+}
+
 /* ============ INIT ============ */
 fillTopicSelects();renderGlossary();updateAvail();
 $("#cloudUrl").value=CLOUD;$("#adminKey").value=ADMIN;$("#userName").value=UNAME;
-if(CLOUD)syncCloud(); else cloudStatus("לא מחובר (עובד מקומית)");
+if(isApproveMode()){initApprove();}
+else if(CLOUD)syncCloud(); else cloudStatus("לא מחובר (עובד מקומית)");
 </script>
 </body>
 </html>

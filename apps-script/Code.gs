@@ -9,6 +9,7 @@ const SHEET_TERMS = 'terms';
 const SHEET_QUESTIONS = 'questions';
 const STATUS_PENDING = 'ממתין';
 const STATUS_APPROVED = 'מאושר';
+const STATUS_REJECTED = 'נדחה';
 
 const TERM_HEADERS = ['id', 'he', 'en', 'short', 'long', 'ex', 'topic', 'week', 'status', 'addedBy', 'timestamp'];
 const QUESTION_HEADERS = ['id', 'term', 'q', 'opt1', 'opt2', 'opt3', 'opt4', 'correct', 'exp', 'status', 'addedBy', 'timestamp'];
@@ -53,8 +54,9 @@ function rows_(name) {
 /** סטטוס מהגיליון -> סטטוס לאפליקציה. ריק/כל דבר שאינו "מאושר" = ממתין */
 function statusOut_(v) {
   const s = String(v || '').trim();
-  return (s === STATUS_APPROVED || s.toLowerCase() === 'approved' || s === 'TRUE' || v === true)
-    ? 'approved' : 'pending';
+  if (s === STATUS_APPROVED || s.toLowerCase() === 'approved' || s === 'TRUE' || v === true) return 'approved';
+  if (s === STATUS_REJECTED || s.toLowerCase() === 'rejected') return 'rejected';
+  return 'pending';
 }
 
 /** קריאת כל הנתונים — נקרא ע"י האפליקציה בטעינה */
@@ -65,7 +67,8 @@ function doGet(e) {
       .map(function (t) {
         return {
           id: String(t.id), he: t.he, en: t.en, short: t.short, long: t.long,
-          ex: t.ex, topic: t.topic || 'כללי', week: t.week || 1, status: statusOut_(t.status)
+          ex: t.ex, topic: t.topic || 'כללי', week: t.week || 1,
+          status: statusOut_(t.status), addedBy: t.addedBy || ''
         };
       });
     const questions = rows_(SHEET_QUESTIONS)
@@ -74,7 +77,8 @@ function doGet(e) {
         return {
           id: String(q.id), term: String(q.term), q: q.q,
           opts: [q.opt1, q.opt2, q.opt3, q.opt4],
-          correct: Number(q.correct) || 0, exp: q.exp, status: statusOut_(q.status)
+          correct: Number(q.correct) || 0, exp: q.exp,
+          status: statusOut_(q.status), addedBy: q.addedBy || ''
         };
       });
     return json_({ ok: true, terms: terms, questions: questions });
@@ -128,8 +132,10 @@ function doPost(e) {
       const stCol = head.indexOf('status');
       for (let i = 1; i < data.length; i++) {
         if (String(data[i][idCol]) === String(body.id)) {
-          sh.getRange(i + 1, stCol + 1)
-            .setValue(body.status === 'approved' ? STATUS_APPROVED : STATUS_PENDING);
+          const newStatus = body.status === 'approved' ? STATUS_APPROVED
+            : body.status === 'rejected' ? STATUS_REJECTED
+            : STATUS_PENDING;
+          sh.getRange(i + 1, stCol + 1).setValue(newStatus);
           return json_({ ok: true });
         }
       }
