@@ -265,6 +265,15 @@
 
     <div class="card">
       <b>הוספת שאלה</b>
+      <div class="note" style="margin:8px 0 4px">
+        <b>איך כותבים שאלה טובה?</b>
+        <ul style="margin:6px 0 0;padding-inline-start:18px">
+          <li>שאלת <b>הבנה</b>, לא שינון — לא "מה ההגדרה של…" אלא "מדוע…" / "מה ממחיש…".</li>
+          <li><b>מסיח טוב נשמע סביר אך שגוי.</b> הימנעו ממסיחים מופרכים שקל לפסול.</li>
+          <li>בלי "כל התשובות נכונות" / "אף תשובה". תשובה נכונה <b>אחת</b> בלבד.</li>
+          <li>ארבע התשובות באורך ובסגנון דומים — אחרת הנכונה בולטת.</li>
+        </ul>
+      </div>
       <label class="lbl">קשור למושג</label><select id="q_term" style="width:100%"></select>
       <label class="lbl">שאלה</label><textarea id="q_text" style="width:100%" rows="2"></textarea>
       <label class="lbl">תשובה נכונה</label><input id="q_a0" style="width:100%">
@@ -596,8 +605,8 @@ function lockAnswer(it){
   });
   const ok=it.answer===q.correct;
   const t=termOf(q);
-  $("#qfeed").innerHTML=`<b style="color:${ok?'var(--ok)':'var(--bad)'}">${ok?"נכון!":"טעות."}</b> ${q.exp} `+
-    `<a onclick="gotoTerm('${q.term}')">↗ למושג: ${t.he}</a>`;
+  $("#qfeed").innerHTML=`<b style="color:${ok?'var(--ok)':'var(--bad)'}">${ok?"נכון!":"טעות."}</b> ${q.exp||""} `+
+    (t.he?`<a onclick="gotoTerm('${q.term}')">↗ למושג: ${t.he}</a>`:"");
   $("#qfeed").classList.remove("hidden");
 }
 $("#qnext").onclick=()=>{
@@ -614,7 +623,7 @@ function finishQuiz(){
     const ok=it.answer===it.q.correct, t=termOf(it.q);
     return `<div class="rowline"><span>${n+1}. ${it.q.q}</span>
       <span class="pill ${ok?'ok':''}" style="${ok?'':'background:#3a1c1a;color:var(--bad)'}">${ok?'✓':'✗'}</span></div>
-      ${ok?'':`<div class="count" style="padding:2px 0 8px">התשובה: ${it.q.opts[it.q.correct]} · <a style="color:var(--accent2);cursor:pointer" onclick="gotoTerm('${it.q.term}')">${t.he}</a></div>`}`;
+      ${ok?'':`<div class="count" style="padding:2px 0 8px">התשובה: ${it.q.opts[it.q.correct]}${t.he?` · <a style="color:var(--accent2);cursor:pointer" onclick="gotoTerm('${it.q.term}')">${t.he}</a>`:""}</div>`}`;
   }).join("");
   $("#quizResult").innerHTML=`<div class="result">
      <div class="score" style="color:${pct>=80?'var(--ok)':pct>=60?'var(--warn)':'var(--bad)'}">${pct}%</div>
@@ -647,7 +656,8 @@ function renderManage(){
      <span>${q.q}<br><span class="count">✔ ${q.opts[q.correct]}</span></span>
      <span style="display:flex;gap:6px"><button class="btn sm" onclick="approveQ('${q.id}')">אשר</button>
      <button class="btn ghost sm" onclick="delQ('${q.id}')">מחק</button></span></div>`).join("")||`<p class="count">אין שאלות ממתינות.</p>`;
-  $("#q_term").innerHTML=DB.terms.map(t=>`<option value="${t.id}">${t.he} — ${t.en}</option>`).join("");
+  $("#q_term").innerHTML='<option value="">— כללי / ללא מושג —</option>'+
+    DB.terms.filter(t=>t.status!=="rejected").map(t=>`<option value="${t.id}">${t.he} — ${t.en}</option>`).join("");
 }
 async function approveQ(id){
   const q=DB.questions.find(x=>x.id===id);if(!q)return;
@@ -679,10 +689,15 @@ $("#addTerm").onclick=async()=>{
   ["t_he","t_en","t_short","t_long","t_ex","t_topic"].forEach(id=>$("#"+id).value="");
 };
 $("#addQ").onclick=async()=>{
-  const qt=$("#q_text").value.trim(),a0=$("#q_a0").value.trim();
-  if(!qt||!a0){alert("חסרה שאלה או תשובה נכונה");return;}
-  const data={term:$("#q_term").value,q:qt,
-    opts:[a0,$("#q_a1").value.trim(),$("#q_a2").value.trim(),$("#q_a3").value.trim()],correct:0,exp:$("#q_exp").value.trim()};
+  const qt=$("#q_text").value.trim();
+  const opts=[$("#q_a0").value.trim(),$("#q_a1").value.trim(),$("#q_a2").value.trim(),$("#q_a3").value.trim()];
+  if(!qt){alert("חסרה השאלה.");return;}
+  if(opts.some(o=>!o)){alert("יש למלא את כל 4 התשובות — תשובה נכונה ושלושה מסיחים.\nשאלה עם פחות מ-4 אפשרויות אינה תקינה למבחן.");return;}
+  const norm=opts.map(o=>o.replace(/\s+/g," ").toLowerCase());
+  if(new Set(norm).size<4){alert("יש תשובות זהות. ארבע האפשרויות חייבות להיות שונות זו מזו.");return;}
+  if(opts.some(o=>/כל התשובות|אף תשובה|כל הנ"?ל|אף אחת מהתשובות/.test(o))){
+    alert('לא להשתמש ב"כל התשובות נכונות" / "אף תשובה". צריכה להיות תשובה נכונה אחת בלבד.');return;}
+  const data={term:$("#q_term").value,q:qt,opts,correct:0,exp:$("#q_exp").value.trim()};
   if(CLOUD){
     try{await cloudPost({action:"addQuestion",data,addedBy:UNAME});await syncCloud();alert("השאלה נשלחה לגיליון וממתינה לאישור המרצה.");}
     catch(e){alert("השליחה לענן נכשלה: "+e.message);return;}
