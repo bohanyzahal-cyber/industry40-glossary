@@ -530,12 +530,12 @@ function fillTopicSelects(){
 }
 function renderGlossary(){
   const q=$("#gsearch").value.trim().toLowerCase(), tp=$("#gtopic").value;
-  const list=DB.terms.filter(t=>{
-    if(t.status==="rejected")return false;
+  const visible=DB.terms.filter(termVisible);
+  const list=visible.filter(t=>{
     const hit=!q||[t.he,t.en,t.short,t.long,t.ex].join(" ").toLowerCase().includes(q);
     return hit&&(!tp||t.topic===tp);
   });
-  $("#gcount").textContent=`${list.length} מתוך ${DB.terms.length} מושגים`;
+  $("#gcount").textContent=`${list.length} מתוך ${visible.length} מושגים`;
   $("#glist").innerHTML=list.map(t=>`
     <div class="card">
       <div class="term-head" onclick="this.parentNode.querySelector('.more').classList.toggle('open')">
@@ -561,6 +561,8 @@ function updateAvail(){
   $("#qavail").textContent=`זמינות לתרגול: ${n} שאלות מאושרות${pend?` · ${pend} ממתינות לאישור`:""}`;
 }
 function termOf(q){return DB.terms.find(t=>t.id===q.term)||{topic:"",he:""};}
+// visible in the glossary = approved, or a base/local term with no status (offline)
+function termVisible(t){return !!t&&(!t.status||t.status==="approved");}
 $("#qtopic").onchange=updateAvail;
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
@@ -606,7 +608,7 @@ function lockAnswer(it){
   const ok=it.answer===q.correct;
   const t=termOf(q);
   $("#qfeed").innerHTML=`<b style="color:${ok?'var(--ok)':'var(--bad)'}">${ok?"נכון!":"טעות."}</b> ${q.exp||""} `+
-    (t.he?`<a onclick="gotoTerm('${q.term}')">↗ למושג: ${t.he}</a>`:"");
+    (t.he&&termVisible(t)?`<a onclick="gotoTerm('${q.term}')">↗ למושג: ${t.he}</a>`:"");
   $("#qfeed").classList.remove("hidden");
 }
 $("#qnext").onclick=()=>{
@@ -623,7 +625,7 @@ function finishQuiz(){
     const ok=it.answer===it.q.correct, t=termOf(it.q);
     return `<div class="rowline"><span>${n+1}. ${it.q.q}</span>
       <span class="pill ${ok?'ok':''}" style="${ok?'':'background:#3a1c1a;color:var(--bad)'}">${ok?'✓':'✗'}</span></div>
-      ${ok?'':`<div class="count" style="padding:2px 0 8px">התשובה: ${it.q.opts[it.q.correct]}${t.he?` · <a style="color:var(--accent2);cursor:pointer" onclick="gotoTerm('${it.q.term}')">${t.he}</a>`:""}</div>`}`;
+      ${ok?'':`<div class="count" style="padding:2px 0 8px">התשובה: ${it.q.opts[it.q.correct]}${t.he&&termVisible(t)?` · <a style="color:var(--accent2);cursor:pointer" onclick="gotoTerm('${it.q.term}')">${t.he}</a>`:""}</div>`}`;
   }).join("");
   $("#quizResult").innerHTML=`<div class="result">
      <div class="score" style="color:${pct>=80?'var(--ok)':pct>=60?'var(--warn)':'var(--bad)'}">${pct}%</div>
@@ -657,7 +659,7 @@ function renderManage(){
      <span style="display:flex;gap:6px"><button class="btn sm" onclick="approveQ('${q.id}')">אשר</button>
      <button class="btn ghost sm" onclick="delQ('${q.id}')">מחק</button></span></div>`).join("")||`<p class="count">אין שאלות ממתינות.</p>`;
   $("#q_term").innerHTML='<option value="">— כללי / ללא מושג —</option>'+
-    DB.terms.filter(t=>t.status!=="rejected").map(t=>`<option value="${t.id}">${t.he} — ${t.en}</option>`).join("");
+    DB.terms.filter(t=>t.status!=="rejected").map(t=>`<option value="${t.id}">${t.he} — ${t.en}${t.status==="pending"?" (ממתין לאישור)":""}</option>`).join("");
 }
 async function approveQ(id){
   const q=DB.questions.find(x=>x.id===id);if(!q)return;
