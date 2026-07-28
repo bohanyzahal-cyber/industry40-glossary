@@ -213,9 +213,16 @@
 
   <!-- ============ MANAGE ============ -->
   <section id="manage" class="hidden">
-    <div class="note">כאן מוסיפים מושגים ושאלות, מאשרים שאלות ממתינות, ומגבים/מייצאים את הנתונים (JSON). הכול נשמר מקומית בדפדפן.</div>
+    <div class="note">כאן תורמים מושגים ושאלות לקורס. כל הצעה נכנסת כ"ממתינה לאישור", ומופיעה לכולם רק אחרי שהמרצה מאשר.</div>
 
     <div class="card">
+      <b>הפרטים שלך</b>
+      <label class="lbl">השם שלך (נרשם ליד כל הוספה — כדי שהמרצה ידע מי תרם)</label>
+      <input id="uname" style="width:100%" placeholder="שם מלא">
+      <div style="margin-top:10px"><button class="btn sm" id="unameSave">שמור</button> <span class="count" id="unameMsg"></span></div>
+    </div>
+
+    <div class="card" style="display:none">
       <b>חיבור לענן (Google Sheets)</b>
       <p class="count" style="margin:6px 0 0">כשמחוברים, כל הוספה נשמרת מרכזית בגיליון ומחכה לאישור המרצה. ללא חיבור — הכלי עובד אופליין ושומר מקומית בלבד.</p>
       <label class="lbl">כתובת ה-Web App (URL)</label>
@@ -246,7 +253,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="display:none">
       <b>אישור שאלות ממתינות</b> <span id="pendCount" class="count"></span>
       <div id="pendList" style="margin-top:10px"></div>
     </div>
@@ -661,6 +668,8 @@ function renderManage(){
   $("#q_term").innerHTML='<option value="">— כללי / ללא מושג —</option>'+
     DB.terms.filter(t=>t.status!=="rejected").map(t=>`<option value="${t.id}">${t.he} — ${t.en}${t.status==="pending"?" (ממתין לאישור)":""}</option>`).join("");
 }
+// read the contributor name from the visible field (and persist it)
+function myName(){const el=$("#uname");const v=el?el.value.trim():"";if(v){UNAME=v;lsSet(NKEY,v);}return UNAME;}
 async function approveQ(id){
   const q=DB.questions.find(x=>x.id===id);if(!q)return;
   if(q.origin==="cloud"){
@@ -681,7 +690,7 @@ $("#addTerm").onclick=async()=>{
   const data={he,en:$("#t_en").value.trim(),short:$("#t_short").value.trim(),long:$("#t_long").value.trim(),
     ex:$("#t_ex").value.trim(),topic:$("#t_topic").value.trim()||"כללי",week:$("#t_week").value.trim()||"1"};
   if(CLOUD){
-    try{await cloudPost({action:"addTerm",data,addedBy:UNAME});await syncCloud();alert("המושג נשלח לגיליון וממתין לאישור.");}
+    try{await cloudPost({action:"addTerm",data,addedBy:myName()});await syncCloud();alert("המושג נשלח לגיליון וממתין לאישור.");}
     catch(e){alert("השליחה לענן נכשלה: "+e.message);return;}
   }else{
     DB.terms.push(Object.assign({id:"t"+Date.now(),status:"approved",origin:"local"},data));
@@ -701,7 +710,7 @@ $("#addQ").onclick=async()=>{
     alert('לא להשתמש ב"כל התשובות נכונות" / "אף תשובה". צריכה להיות תשובה נכונה אחת בלבד.');return;}
   const data={term:$("#q_term").value,q:qt,opts,correct:0,exp:$("#q_exp").value.trim()};
   if(CLOUD){
-    try{await cloudPost({action:"addQuestion",data,addedBy:UNAME});await syncCloud();alert("השאלה נשלחה לגיליון וממתינה לאישור המרצה.");}
+    try{await cloudPost({action:"addQuestion",data,addedBy:myName()});await syncCloud();alert("השאלה נשלחה לגיליון וממתינה לאישור המרצה.");}
     catch(e){alert("השליחה לענן נכשלה: "+e.message);return;}
   }else{
     DB.questions.push(Object.assign({id:"q"+Date.now(),status:"pending",origin:"local"},data));
@@ -831,7 +840,8 @@ async function doApprove(type,id,status){
 
 /* ============ INIT ============ */
 fillTopicSelects();renderGlossary();updateAvail();
-$("#cloudUrl").value=CLOUD;$("#adminKey").value=ADMIN;$("#userName").value=UNAME;
+$("#cloudUrl").value=CLOUD;$("#adminKey").value=ADMIN;$("#userName").value=UNAME;$("#uname").value=UNAME;
+$("#unameSave").onclick=()=>{myName();const m=$("#unameMsg");if(m){m.textContent="נשמר ✓";m.style.color="var(--ok)";setTimeout(()=>m.textContent="",2000);}};
 if(isApproveMode()){initApprove();}
 else if(CLOUD)syncCloud(); else cloudStatus("לא מחובר (עובד מקומית)");
 </script>
