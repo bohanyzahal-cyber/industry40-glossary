@@ -517,8 +517,14 @@ function cloudStatus(msg,ok){
   el.textContent="מצב: "+msg;
   el.style.color = ok===false?"var(--bad)" : ok?"var(--ok)" : "var(--muted)";
 }
+/** השרת מחזיר רק פריטים מאושרים; שליחת השם מוסיפה את ההגשות של אותו אדם בלבד.
+ *  במסך האישור נשלח קוד המנהל ומתקבלת הרשימה המלאה. */
 async function cloudGet(){
-  const r=await fetch(CLOUD,{method:"GET"});
+  if(isApproveMode()&&ADMIN){
+    return await cloudPost({action:"listAll",adminKey:ADMIN});
+  }
+  const url=CLOUD+(UNAME?((CLOUD.indexOf("?")===-1?"?":"&")+"me="+encodeURIComponent(UNAME)):"");
+  const r=await fetch(url,{method:"GET"});
   const j=await r.json();
   if(!j.ok)throw new Error(j.error||"שגיאה לא ידועה");
   return j;
@@ -1003,7 +1009,13 @@ async function doApprove(type,id,status,btn){
 fillTopicSelects();renderGlossary();updateAvail();
 $("#cloudUrl").value=CLOUD;$("#adminKey").value=ADMIN;$("#userName").value=UNAME;
 $("#uname").value=UNAME;$("#upartners").value=PARTNERS;
-$("#unameSave").onclick=()=>{myName();renderMine();const m=$("#unameMsg");if(m){m.textContent="נשמר ✓";m.style.color="var(--ok)";setTimeout(()=>m.textContent="",2000);}};
+$("#unameSave").onclick=async()=>{
+  myName();
+  const m=$("#unameMsg");
+  if(m){m.textContent="נשמר ✓";m.style.color="var(--ok)";setTimeout(()=>m.textContent="",2000);}
+  if(CLOUD)await syncCloud();   // the server returns your submissions only once it knows your name
+  renderMine();
+};
 $("#mineRefresh").onclick=async()=>{if(CLOUD)await syncCloud();renderMine();};
 updateMineBadge();
 if(isApproveMode()){initApprove();}

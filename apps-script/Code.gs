@@ -79,29 +79,56 @@ function statusOut_(v) {
   return 'pending';
 }
 
-/** קריאת כל הנתונים — נקרא ע"י האפליקציה בטעינה */
+/** קריאת כל השורות מהגיליונות, ללא סינון (לשימוש פנימי בלבד) */
+function readAll_() {
+  const terms = rows_(SHEET_TERMS)
+    .filter(function (t) { return t.id; })
+    .map(function (t) {
+      return {
+        id: String(t.id), he: t.he, en: t.en, short: t.short, long: t.long,
+        ex: t.ex, topic: t.topic || 'כללי', week: t.week || 1,
+        status: statusOut_(t.status), addedBy: t.addedBy || '', note: t.note || ''
+      };
+    });
+  const questions = rows_(SHEET_QUESTIONS)
+    .filter(function (q) { return q.id; })
+    .map(function (q) {
+      return {
+        id: String(q.id), term: String(q.term), q: q.q,
+        opts: [q.opt1, q.opt2, q.opt3, q.opt4],
+        correct: Number(q.correct) || 0, exp: q.exp,
+        status: statusOut_(q.status), addedBy: q.addedBy || '', note: q.note || ''
+      };
+    });
+  return { terms: terms, questions: questions };
+}
+
+/** האם השם 'me' מופיע ברשימת המגישים של הפריט */
+function ownedBy_(item, me) {
+  if (!me) return false;
+  const target = String(me).trim().toLowerCase();
+  if (!target) return false;
+  return String(item.addedBy || '').toLowerCase()
+    .split(/[,;\/|]+/)
+    .some(function (n) { return n.trim() === target; });
+}
+
+/**
+ * קריאה ע"י האפליקציה.
+ * ברירת מחדל מחזירה אך ורק פריטים מאושרים — כך שתוכן שטרם אושר
+ * (כולל התשובות הנכונות של שאלות ממתינות) אינו יוצא מהשרת.
+ * פרמטר me מחזיר בנוסף את הפריטים שאותו אדם רשום בהם.
+ */
 function doGet(e) {
   try {
-    const terms = rows_(SHEET_TERMS)
-      .filter(function (t) { return t.id; })
-      .map(function (t) {
-        return {
-          id: String(t.id), he: t.he, en: t.en, short: t.short, long: t.long,
-          ex: t.ex, topic: t.topic || 'כללי', week: t.week || 1,
-          status: statusOut_(t.status), addedBy: t.addedBy || '', note: t.note || ''
-        };
-      });
-    const questions = rows_(SHEET_QUESTIONS)
-      .filter(function (q) { return q.id; })
-      .map(function (q) {
-        return {
-          id: String(q.id), term: String(q.term), q: q.q,
-          opts: [q.opt1, q.opt2, q.opt3, q.opt4],
-          correct: Number(q.correct) || 0, exp: q.exp,
-          status: statusOut_(q.status), addedBy: q.addedBy || '', note: q.note || ''
-        };
-      });
-    return json_({ ok: true, terms: terms, questions: questions });
+    const me = (e && e.parameter && e.parameter.me) ? e.parameter.me : '';
+    const all = readAll_();
+    const keep = function (x) { return x.status === 'approved' || ownedBy_(x, me); };
+    return json_({
+      ok: true,
+      terms: all.terms.filter(keep),
+      questions: all.questions.filter(keep)
+    });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
@@ -138,6 +165,14 @@ function doPost(e) {
         status: STATUS_PENDING, addedBy: body.addedBy || '', note: '', timestamp: new Date()
       });
       return json_({ ok: true, id: id });
+    }
+
+    /** רשימה מלאה כולל ממתינים — למסך האישור בלבד, מוגן בקוד מנהל */
+    if (action === 'listAll') {
+      const key = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+      if (!key || body.adminKey !== key) return json_({ ok: false, error: 'קוד מנהל שגוי' });
+      const all = readAll_();
+      return json_({ ok: true, terms: all.terms, questions: all.questions });
     }
 
     /** אישור/ביטול — מוגן בקוד מנהל (Script Property בשם ADMIN_KEY) */
