@@ -63,6 +63,14 @@
   label.lbl{font-size:13px;color:var(--muted);display:block;margin:8px 0 3px}
   .note{background:#132a2a;border:1px solid #21403f;border-radius:10px;padding:12px 14px;font-size:13px;color:var(--muted);margin-bottom:16px}
   .hidden{display:none}
+  .tabbadge{display:inline-block;background:var(--warn);color:#2a2005;border-radius:20px;padding:0 7px;font-size:11px;font-weight:700;margin-inline-start:4px}
+  .st{display:inline-block;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600}
+  .st.approved{background:#123424;color:var(--ok)}
+  .st.pending{background:#3a2f14;color:var(--warn)}
+  .st.revise{background:#3b2410;color:#f0a45c}
+  .st.rejected{background:#3a1c1a;color:var(--bad)}
+  .notebox{background:#3b2410;border:1px solid #6b4520;border-radius:8px;padding:9px 12px;margin-top:9px;font-size:13px;color:#f4d7bb}
+  .notebox b{color:#ffd9b3}
   /* welcome overlay */
   #welcome{position:fixed;inset:0;background:linear-gradient(150deg,#0d1a1f,#12262b);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
   .wcard{max-width:560px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px 26px;text-align:center}
@@ -173,6 +181,7 @@
   <button data-tab="glossary" class="active">מילון מושגים</button>
   <button data-tab="quiz">תרגול ומבחן</button>
   <button data-tab="manage">ניהול והוספה</button>
+  <button data-tab="mine">ההצעות שלי <span id="mineBadge" class="tabbadge hidden"></span></button>
 </nav>
 
 <main class="wrap">
@@ -222,14 +231,27 @@
     <div id="quizResult" class="hidden"></div>
   </section>
 
+  <!-- ============ MY SUBMISSIONS ============ -->
+  <section id="mine" class="hidden">
+    <div class="note">כאן מופיעות ההצעות שהגשתם, לפי השם שרשמתם בטאב "ניהול והוספה". פריט שהמרצה החזיר לתיקון מוצג עם הערתו וניתן לערוך אותו ולשלוח מחדש.</div>
+    <div class="toolbar">
+      <button class="btn ghost sm" id="mineRefresh">רענן</button>
+      <span class="count" id="mineCount"></span>
+    </div>
+    <div id="mineList"></div>
+  </section>
+
   <!-- ============ MANAGE ============ -->
   <section id="manage" class="hidden">
     <div class="note">כאן תורמים מושגים ושאלות לקורס. כל הצעה נכנסת כ"ממתינה לאישור", ומופיעה לכולם רק אחרי שהמרצה מאשר.</div>
 
     <div class="card">
       <b>הפרטים שלך</b>
-      <label class="lbl">השם שלך (נרשם ליד כל הוספה — כדי שהמרצה ידע מי תרם)</label>
+      <p class="count" style="margin:6px 0 0">השמות נרשמים ליד כל הוספה, כדי שהמרצה ידע מי הקבוצה שהגישה. השם האישי משמש גם לאיתור ההצעות שלכם בטאב "ההצעות שלי".</p>
+      <label class="lbl">השם שלך</label>
       <input id="uname" style="width:100%" placeholder="שם מלא">
+      <label class="lbl">שותפים למטלה (אם הגשתם בזוג או בשלשה — מופרדים בפסיק)</label>
+      <input id="upartners" style="width:100%" placeholder="לדוגמה: דנה כהן, אבי לוי">
       <div style="margin-top:10px"><button class="btn sm" id="unameSave">שמור</button> <span class="count" id="unameMsg"></span></div>
     </div>
 
@@ -523,6 +545,7 @@ async function syncCloud(){
     DB.terms=[...tm.values()];DB.questions=[...qm.values()];
     save();fillTopicSelects();renderGlossary();updateAvail();
     if(!$("#manage").classList.contains("hidden"))renderManage();
+    if(!$("#mine").classList.contains("hidden"))renderMine(); else updateMineBadge();
     const pend=DB.questions.filter(q=>q.status==="pending").length;
     const nT=DB.terms.filter(t=>t.status!=="rejected").length;
     const nQ=DB.questions.filter(q=>q.status!=="rejected").length;
@@ -535,9 +558,10 @@ async function syncCloud(){
 /* ============ TABS ============ */
 $$("nav button").forEach(b=>b.onclick=()=>{
   $$("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
-  ["glossary","quiz","manage"].forEach(id=>$("#"+id).classList.add("hidden"));
+  ["glossary","quiz","manage","mine"].forEach(id=>$("#"+id).classList.add("hidden"));
   $("#"+b.dataset.tab).classList.remove("hidden");
   if(b.dataset.tab==="manage")renderManage();
+  if(b.dataset.tab==="mine")renderMine();
 });
 
 /* ============ GLOSSARY ============ */
@@ -656,7 +680,7 @@ function backToSetup(){$("#quizResult").classList.add("hidden");$("#quizSetup").
 function gotoTerm(id){
   $$("nav button").forEach(x=>x.classList.remove("active"));
   document.querySelector('nav [data-tab="glossary"]').classList.add("active");
-  ["glossary","quiz","manage"].forEach(s=>$("#"+s).classList.add("hidden"));
+  ["glossary","quiz","manage","mine"].forEach(s=>$("#"+s).classList.add("hidden"));
   $("#glossary").classList.remove("hidden");
   $("#gsearch").value="";$("#gtopic").value="";
   const t=DB.terms.find(x=>x.id===id);renderGlossary();
@@ -679,8 +703,22 @@ function renderManage(){
   $("#q_term").innerHTML='<option value="">— כללי / ללא מושג —</option>'+
     DB.terms.filter(t=>t.status!=="rejected").map(t=>`<option value="${t.id}">${t.he} — ${t.en}${t.status==="pending"?" (ממתין לאישור)":""}</option>`).join("");
 }
-// read the contributor name from the visible field (and persist it)
-function myName(){const el=$("#uname");const v=el?el.value.trim():"";if(v){UNAME=v;lsSet(NKEY,v);}return UNAME;}
+/* ============ CONTRIBUTOR NAMES ============ */
+const PKEY="ind40_partners";
+let PARTNERS=lsGet(PKEY);
+// reads both name fields, persists them, and returns the byline saved with each submission
+function myName(){
+  const a=$("#uname"), b=$("#upartners");
+  if(a){const v=a.value.trim();if(v){UNAME=v;lsSet(NKEY,v);}}
+  if(b){PARTNERS=b.value.trim();lsSet(PKEY,PARTNERS);}
+  return [UNAME,PARTNERS].filter(Boolean).join(", ");
+}
+// does this submission belong to me? matches my personal name inside the byline
+function isMine(x){
+  const me=(UNAME||"").trim().toLowerCase();
+  if(!me)return false;
+  return String(x.addedBy||"").toLowerCase().split(/[,،;/|]+/).map(s=>s.trim()).includes(me);
+}
 async function approveQ(id){
   const q=DB.questions.find(x=>x.id===id);if(!q)return;
   if(q.origin==="cloud"){
@@ -701,7 +739,16 @@ $("#addTerm").onclick=async()=>{
   const data={he,en:$("#t_en").value.trim(),short:$("#t_short").value.trim(),long:$("#t_long").value.trim(),
     ex:$("#t_ex").value.trim(),topic:$("#t_topic").value.trim()||"כללי",week:$("#t_week").value.trim()||"1"};
   if(CLOUD){
-    try{await cloudPost({action:"addTerm",data,addedBy:myName()});await syncCloud();alert("המושג נשלח לגיליון וממתין לאישור.");}
+    const fixing=FIXING&&FIXING.kind==="term"?FIXING.id:null;
+    try{
+      if(fixing){
+        await cloudPost({action:"updateItem",type:"term",id:fixing,data,addedBy:myName()});
+        await syncCloud();clearFix();alert("התיקון נשלח וחזר לתור האישור של המרצה.");
+      }else{
+        await cloudPost({action:"addTerm",data,addedBy:myName()});await syncCloud();
+        alert("המושג נשלח לגיליון וממתין לאישור.");
+      }
+    }
     catch(e){alert("השליחה לענן נכשלה: "+e.message);return;}
   }else{
     DB.terms.push(Object.assign({id:"t"+Date.now(),status:"approved",origin:"local"},data));
@@ -721,7 +768,16 @@ $("#addQ").onclick=async()=>{
     alert('לא להשתמש ב"כל התשובות נכונות" / "אף תשובה". צריכה להיות תשובה נכונה אחת בלבד.');return;}
   const data={term:$("#q_term").value,q:qt,opts,correct:0,exp:$("#q_exp").value.trim()};
   if(CLOUD){
-    try{await cloudPost({action:"addQuestion",data,addedBy:myName()});await syncCloud();alert("השאלה נשלחה לגיליון וממתינה לאישור המרצה.");}
+    const fixing=FIXING&&FIXING.kind==="question"?FIXING.id:null;
+    try{
+      if(fixing){
+        await cloudPost({action:"updateItem",type:"question",id:fixing,data,addedBy:myName()});
+        await syncCloud();clearFix();alert("התיקון נשלח וחזר לתור האישור של המרצה.");
+      }else{
+        await cloudPost({action:"addQuestion",data,addedBy:myName()});await syncCloud();
+        alert("השאלה נשלחה לגיליון וממתינה לאישור המרצה.");
+      }
+    }
     catch(e){alert("השליחה לענן נכשלה: "+e.message);return;}
   }else{
     DB.questions.push(Object.assign({id:"q"+Date.now(),status:"pending",origin:"local"},data));
@@ -772,10 +828,83 @@ function printSheet(){
   // switch to glossary, clear filters, show all + expand every term, then print
   $$("nav button").forEach(x=>x.classList.remove("active"));
   document.querySelector('nav [data-tab="glossary"]').classList.add("active");
-  ["glossary","quiz","manage"].forEach(s=>$("#"+s).classList.add("hidden"));
+  ["glossary","quiz","manage","mine"].forEach(s=>$("#"+s).classList.add("hidden"));
   $("#glossary").classList.remove("hidden");
   $("#gsearch").value="";$("#gtopic").value="";renderGlossary();
   setTimeout(()=>{$$("#glist .more").forEach(m=>m.classList.add("open"));window.print();},80);
+}
+
+/* ============ MY SUBMISSIONS ============ */
+const ST_LABEL={approved:"מאושר",pending:"ממתין לאישור",revise:"הוחזר לתיקון",rejected:"נדחה"};
+function mineItems(){
+  return [].concat(
+    DB.terms.filter(isMine).map(t=>({kind:"term",item:t})),
+    DB.questions.filter(isMine).map(q=>({kind:"question",item:q}))
+  );
+}
+function updateMineBadge(){
+  const n=mineItems().filter(x=>(x.item.status||"")==="revise").length;
+  const b=$("#mineBadge");if(!b)return;
+  if(n){b.textContent=n;b.classList.remove("hidden");}else{b.classList.add("hidden");}
+}
+function renderMine(){
+  const list=mineItems();
+  const c=$("#mineCount");
+  if(!UNAME){
+    c.textContent="";
+    $("#mineList").innerHTML=`<div class="card"><b>עדיין לא רשמתם שם</b><p class="count" style="margin-top:6px">כדי לראות את ההצעות שלכם, עברו לטאב <b>"ניהול והוספה"</b>, רשמו את שמכם ולחצו "שמור".</p></div>`;
+    return;
+  }
+  const rev=list.filter(x=>x.item.status==="revise").length;
+  c.textContent=list.length?`${list.length} הצעות${rev?` · ${rev} ממתינות לתיקון שלכם`:""}`:"";
+  $("#mineList").innerHTML=list.length?list.map(mineCard).join(""):
+    `<div class="card"><b>לא נמצאו הצעות בשם "${UNAME}"</b><p class="count" style="margin-top:6px">ודאו שהשם רשום בדיוק כפי שנרשם בהגשה (טאב "ניהול והוספה").</p></div>`;
+  $$("#mineList [data-fix]").forEach(b=>b.onclick=()=>openFix(b.dataset.kind,b.dataset.fix));
+  updateMineBadge();
+}
+function mineCard(x){
+  const it=x.item, st=it.status||"pending";
+  const head = x.kind==="question"
+    ? `<div class="term-he" style="font-size:15px">${it.q}</div><div class="count" style="margin-top:4px">✔ ${it.opts[it.correct]}</div>`
+    : `<div class="term-head"><span class="term-he">${it.he}</span><span class="term-en">${it.en||""}</span></div><div class="short">${it.short||""}</div>`;
+  const note = it.note ? `<div class="notebox"><b>הערת המרצה:</b> ${it.note}</div>` : "";
+  const fix = st==="revise"
+    ? `<div style="margin-top:10px"><button class="btn sm" data-fix="${it.id}" data-kind="${x.kind}">✎ ערוך ושלח מחדש</button></div>` : "";
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">
+      <span class="chip">${x.kind==="question"?"שאלה":"מושג"}</span>
+      <span class="st ${st}">${ST_LABEL[st]||st}</span>
+    </div>${head}${note}${fix}</div>`;
+}
+// load a returned item into the add form, and switch that form to "resubmit" mode
+let FIXING=null;
+function openFix(kind,id){
+  const it=(kind==="term"?DB.terms:DB.questions).find(x=>x.id===id);
+  if(!it)return;
+  FIXING={kind,id};
+  document.querySelector('nav [data-tab="manage"]').click();
+  if(kind==="term"){
+    $("#t_he").value=it.he||"";$("#t_en").value=it.en||"";$("#t_short").value=it.short||"";
+    $("#t_long").value=it.long||"";$("#t_ex").value=it.ex||"";$("#t_topic").value=it.topic||"";
+    $("#t_week").value=it.week||1;
+    $("#addTerm").textContent="שלח תיקון מחדש";
+    $("#t_he").scrollIntoView({behavior:"smooth",block:"center"});
+  }else{
+    $("#q_term").value=it.term||"";$("#q_text").value=it.q||"";
+    $("#q_a0").value=it.opts[it.correct]||"";
+    const others=it.opts.filter((o,i)=>i!==it.correct);
+    $("#q_a1").value=others[0]||"";$("#q_a2").value=others[1]||"";$("#q_a3").value=others[2]||"";
+    $("#q_exp").value=it.exp||"";
+    $("#addQ").textContent="שלח תיקון מחדש";
+    $("#q_text").scrollIntoView({behavior:"smooth",block:"center"});
+  }
+  alert("הפריט נטען לטופס. תקנו לפי הערת המרצה ולחצו \"שלח תיקון מחדש\".");
+}
+function clearFix(){
+  FIXING=null;
+  const a=$("#addTerm"),b=$("#addQ");
+  if(a)a.textContent="הוסף מושג";
+  if(b)b.textContent="הוסף שאלה (ממתינה לאישור)";
 }
 
 /* ============ APPROVAL MODE ============ */
@@ -818,7 +947,7 @@ async function loadApproveQueue(){
   $("#approveCount").textContent=pend.length?`${pend.length} ממתינים לאישור`:"אין פריטים ממתינים 🎉";
   $("#approveList").innerHTML=pend.map(approveCard).join("");
   $$("#approveList [data-app]").forEach(b=>b.onclick=()=>{
-    b.disabled=true;doApprove(b.dataset.type,b.dataset.id,b.dataset.app);
+    b.disabled=true;doApprove(b.dataset.type,b.dataset.id,b.dataset.app,b);
   });
 }
 function approveCard(x){
@@ -839,20 +968,44 @@ function approveCard(x){
       <div class="chips"><span class="chip">מושג</span><span class="chip">${it.topic||""}</span>${who}</div>`;
   }
   return `<div class="card">${inner}
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn sm" data-app="approved" data-type="${x.kind}" data-id="${it.id}">✔ אשר</button>
-      <button class="btn ghost sm" data-app="rejected" data-type="${x.kind}" data-id="${it.id}">✖ דחה</button>
+    ${it.note?`<div class="notebox"><b>הערה קודמת שלך:</b> ${it.note}</div>`:""}
+    <div style="margin-top:12px">
+      <input class="reasonBox hidden" id="reason_${it.id}" style="width:100%" placeholder="סיבת ההחזרה / מה צריך לתקן — יוצג למגישים">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn sm" data-app="approved" data-type="${x.kind}" data-id="${it.id}">✔ אשר</button>
+        <button class="btn ghost sm" data-app="revise" data-type="${x.kind}" data-id="${it.id}">↩ החזר לתיקון</button>
+        <button class="btn ghost sm" data-app="rejected" data-type="${x.kind}" data-id="${it.id}">✖ דחה סופית</button>
+      </div>
     </div></div>`;
 }
-async function doApprove(type,id,status){
-  try{await cloudPost({action:"setStatus",type,id,status,adminKey:ADMIN});await loadApproveQueue();}
+async function doApprove(type,id,status,btn){
+  let note="";
+  if(status==="revise"||status==="rejected"){
+    const box=$("#reason_"+id);
+    // first click reveals the reason field; second click sends
+    if(box&&box.classList.contains("hidden")){
+      box.classList.remove("hidden");box.focus();
+      if(btn)btn.disabled=false;
+      box.onkeydown=e=>{if(e.key==="Enter")doApprove(type,id,status,btn);};
+      return;
+    }
+    note=box?box.value.trim():"";
+    if(status==="revise"&&!note){
+      alert("כדי להחזיר לתיקון צריך לכתוב מה לתקן — ההערה תוצג למגישים.");
+      if(btn)btn.disabled=false;box&&box.focus();return;
+    }
+  }
+  try{await cloudPost({action:"setStatus",type,id,status,note,adminKey:ADMIN});await loadApproveQueue();}
   catch(e){alert("הפעולה נכשלה: "+e.message);loadApproveQueue();}
 }
 
 /* ============ INIT ============ */
 fillTopicSelects();renderGlossary();updateAvail();
-$("#cloudUrl").value=CLOUD;$("#adminKey").value=ADMIN;$("#userName").value=UNAME;$("#uname").value=UNAME;
-$("#unameSave").onclick=()=>{myName();const m=$("#unameMsg");if(m){m.textContent="נשמר ✓";m.style.color="var(--ok)";setTimeout(()=>m.textContent="",2000);}};
+$("#cloudUrl").value=CLOUD;$("#adminKey").value=ADMIN;$("#userName").value=UNAME;
+$("#uname").value=UNAME;$("#upartners").value=PARTNERS;
+$("#unameSave").onclick=()=>{myName();renderMine();const m=$("#unameMsg");if(m){m.textContent="נשמר ✓";m.style.color="var(--ok)";setTimeout(()=>m.textContent="",2000);}};
+$("#mineRefresh").onclick=async()=>{if(CLOUD)await syncCloud();renderMine();};
+updateMineBadge();
 if(isApproveMode()){initApprove();}
 else if(CLOUD)syncCloud(); else cloudStatus("לא מחובר (עובד מקומית)");
 </script>
