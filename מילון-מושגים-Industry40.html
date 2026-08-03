@@ -339,7 +339,13 @@
       <p class="count" id="approveKeyMsg" style="margin-top:8px"></p>
     </div>
     <div id="approveBody" class="hidden">
-      <div class="toolbar"><button class="btn ghost sm" id="approveRefresh">רענן</button><span class="count" id="approveCount"></span></div>
+      <div class="toolbar">
+        <button class="btn ghost sm" id="approveRefresh">רענן</button>
+        <button class="btn ghost sm" id="reportBtn">📋 סיכום הגשות לציון</button>
+        <span class="count" id="approveCount"></span>
+        <span class="count" id="approveSaving" style="color:var(--warn)"></span>
+      </div>
+      <div id="reportBox" class="hidden"></div>
       <div id="approveList"></div>
     </div>
   </div>
@@ -537,19 +543,23 @@ async function cloudPost(payload){
   return j;
 }
 /** SEED = בסיס אופליין; הענן מתווסף מעליו (ומנצח בהתנגשות מזהים) */
+function mergeCloud(j){
+  const tm=new Map();
+  SEED.terms.forEach(t=>tm.set(t.id,Object.assign({},t,{status:"approved",origin:"seed"})));
+  (j.terms||[]).forEach(t=>tm.set(String(t.id),Object.assign({},t,{origin:"cloud"})));
+  const qm=new Map();
+  SEED.questions.forEach(q=>qm.set(q.id,Object.assign({},q,{origin:"seed"})));
+  (j.questions||[]).forEach(q=>qm.set(String(q.id),Object.assign({},q,{origin:"cloud"})));
+  DB.terms=[...tm.values()];DB.questions=[...qm.values()];
+  save();
+}
 async function syncCloud(){
   if(!CLOUD){cloudStatus("לא מחובר (עובד מקומית)");return;}
   cloudStatus("מסנכרן…");
   try{
     const j=await cloudGet();
-    const tm=new Map();
-    SEED.terms.forEach(t=>tm.set(t.id,Object.assign({},t,{status:"approved",origin:"seed"})));
-    (j.terms||[]).forEach(t=>tm.set(String(t.id),Object.assign({},t,{origin:"cloud"})));
-    const qm=new Map();
-    SEED.questions.forEach(q=>qm.set(q.id,Object.assign({},q,{origin:"seed"})));
-    (j.questions||[]).forEach(q=>qm.set(String(q.id),Object.assign({},q,{origin:"cloud"})));
-    DB.terms=[...tm.values()];DB.questions=[...qm.values()];
-    save();fillTopicSelects();renderGlossary();updateAvail();
+    mergeCloud(j);
+    fillTopicSelects();renderGlossary();updateAvail();
     if(!$("#manage").classList.contains("hidden"))renderManage();
     if(!$("#mine").classList.contains("hidden"))renderMine(); else updateMineBadge();
     const pend=DB.questions.filter(q=>q.status==="pending").length;
@@ -719,6 +729,16 @@ function myName(){
   if(b){PARTNERS=b.value.trim();lsSet(PKEY,PARTNERS);}
   return [UNAME,PARTNERS].filter(Boolean).join(", ");
 }
+// a submission with no name cannot be graded, so block it at the source
+function requireName(){
+  const byline=myName();
+  if(byline)return byline;
+  alert("לפני שליחה יש לרשום את שמכם (ואת שמות השותפים) באזור \"הפרטים שלך\".\nבלי שם המרצה לא יוכל לזכות אתכם במטלה.");
+  const el=$("#uname");
+  if(el){el.scrollIntoView({behavior:"smooth",block:"center"});el.focus();el.style.borderColor="var(--bad)";
+    setTimeout(()=>el.style.borderColor="",2500);}
+  return "";
+}
 // does this submission belong to me? matches my personal name inside the byline
 function isMine(x){
   const me=(UNAME||"").trim().toLowerCase();
@@ -742,16 +762,17 @@ function delQ(id){
 }
 $("#addTerm").onclick=async()=>{
   const he=$("#t_he").value.trim();if(!he){alert("חסר מונח בעברית");return;}
+  const who=requireName(); if(!who)return;
   const data={he,en:$("#t_en").value.trim(),short:$("#t_short").value.trim(),long:$("#t_long").value.trim(),
     ex:$("#t_ex").value.trim(),topic:$("#t_topic").value.trim()||"כללי",week:$("#t_week").value.trim()||"1"};
   if(CLOUD){
     const fixing=FIXING&&FIXING.kind==="term"?FIXING.id:null;
     try{
       if(fixing){
-        await cloudPost({action:"updateItem",type:"term",id:fixing,data,addedBy:myName()});
+        await cloudPost({action:"updateItem",type:"term",id:fixing,data,addedBy:who});
         await syncCloud();clearFix();alert("התיקון נשלח וחזר לתור האישור של המרצה.");
       }else{
-        await cloudPost({action:"addTerm",data,addedBy:myName()});await syncCloud();
+        await cloudPost({action:"addTerm",data,addedBy:who});await syncCloud();
         alert("המושג נשלח לגיליון וממתין לאישור.");
       }
     }
@@ -772,15 +793,16 @@ $("#addQ").onclick=async()=>{
   if(new Set(norm).size<4){alert("יש תשובות זהות. ארבע האפשרויות חייבות להיות שונות זו מזו.");return;}
   if(opts.some(o=>/כל התשובות|אף תשובה|כל הנ"?ל|אף אחת מהתשובות/.test(o))){
     alert('לא להשתמש ב"כל התשובות נכונות" / "אף תשובה". צריכה להיות תשובה נכונה אחת בלבד.');return;}
+  const who=requireName(); if(!who)return;
   const data={term:$("#q_term").value,q:qt,opts,correct:0,exp:$("#q_exp").value.trim()};
   if(CLOUD){
     const fixing=FIXING&&FIXING.kind==="question"?FIXING.id:null;
     try{
       if(fixing){
-        await cloudPost({action:"updateItem",type:"question",id:fixing,data,addedBy:myName()});
+        await cloudPost({action:"updateItem",type:"question",id:fixing,data,addedBy:who});
         await syncCloud();clearFix();alert("התיקון נשלח וחזר לתור האישור של המרצה.");
       }else{
-        await cloudPost({action:"addQuestion",data,addedBy:myName()});await syncCloud();
+        await cloudPost({action:"addQuestion",data,addedBy:who});await syncCloud();
         alert("השאלה נשלחה לגיליון וממתינה לאישור המרצה.");
       }
     }
@@ -928,6 +950,11 @@ function initApprove(){
   $("#approveView").classList.remove("hidden");
   $("#approveLogin").onclick=approveLogin;
   $("#approveRefresh").onclick=loadApproveQueue;
+  $("#reportBtn").onclick=()=>{
+    const b=$("#reportBox");
+    if(b.classList.contains("hidden")){renderReport();b.classList.remove("hidden");$("#reportBtn").textContent="✕ סגור סיכום";}
+    else{b.classList.add("hidden");$("#reportBtn").textContent="📋 סיכום הגשות לציון";}
+  };
   $("#approveKey").addEventListener("keydown",e=>{if(e.key==="Enter")approveLogin();});
   if(ADMIN){$("#approveKey").value=ADMIN;approveLogin();}
 }
@@ -945,12 +972,26 @@ async function approveLogin(){
 }
 async function loadApproveQueue(){
   $("#approveCount").textContent="טוען…";
-  await syncCloud();
+  // Fetch the full list explicitly. A stale page (loaded before a backend
+  // update) would otherwise fall back to the approved-only feed and show an
+  // empty queue, which reads as "everything vanished".
+  try{
+    const j=await cloudPost({action:"listAll",adminKey:ADMIN});
+    mergeCloud(j);
+  }catch(e){
+    $("#approveCount").textContent="";
+    $("#approveList").innerHTML=`<div class="card" style="border-color:var(--bad)">
+      <b style="color:var(--bad)">לא ניתן לטעון את רשימת ההגשות</b>
+      <p class="count" style="margin-top:6px">${e.message}</p>
+      <p class="count">אם הדף פתוח כבר זמן רב — רעננו אותו (בטלפון: משיכה מטה) ונסו שוב.</p>
+      <div style="margin-top:10px"><button class="btn sm" onclick="location.reload(true)">רענן את הדף</button></div></div>`;
+    return;
+  }
   const pend=[].concat(
     DB.terms.filter(t=>t.status==="pending").map(t=>({kind:"term",item:t})),
     DB.questions.filter(q=>q.status==="pending").map(q=>({kind:"question",item:q}))
   );
-  $("#approveCount").textContent=pend.length?`${pend.length} ממתינים לאישור`:"אין פריטים ממתינים 🎉";
+  refreshApproveCount();
   $("#approveList").innerHTML=pend.map(approveCard).join("");
   $$("#approveList [data-app]").forEach(b=>b.onclick=()=>{
     b.disabled=true;doApprove(b.dataset.type,b.dataset.id,b.dataset.app,b);
@@ -973,7 +1014,7 @@ function approveCard(x){
       ${it.ex?`<p class="count"><b>דוגמה:</b> ${it.ex}</p>`:""}
       <div class="chips"><span class="chip">מושג</span><span class="chip">${it.topic||""}</span>${who}</div>`;
   }
-  return `<div class="card">${inner}
+  return `<div class="card" id="card_${it.id}">${inner}
     ${it.note?`<div class="notebox"><b>הערה קודמת שלך:</b> ${it.note}</div>`:""}
     <div style="margin-top:12px">
       <input class="reasonBox hidden" id="reason_${it.id}" style="width:100%" placeholder="סיבת ההחזרה / מה צריך לתקן — יוצג למגישים">
@@ -983,6 +1024,14 @@ function approveCard(x){
         <button class="btn ghost sm" data-app="rejected" data-type="${x.kind}" data-id="${it.id}">✖ דחה סופית</button>
       </div>
     </div></div>`;
+}
+/* The card disappears immediately and the request is sent in the background,
+   so the lecturer never waits for the round-trip. A failure restores the card. */
+let PENDING_SENDS=0;
+function approveBusy(delta){
+  PENDING_SENDS=Math.max(0,PENDING_SENDS+delta);
+  const el=$("#approveSaving");if(!el)return;
+  el.textContent=PENDING_SENDS?`שומר ${PENDING_SENDS} פעולות…`:"";
 }
 async function doApprove(type,id,status,btn){
   let note="";
@@ -1001,8 +1050,91 @@ async function doApprove(type,id,status,btn){
       if(btn)btn.disabled=false;box&&box.focus();return;
     }
   }
-  try{await cloudPost({action:"setStatus",type,id,status,note,adminKey:ADMIN});await loadApproveQueue();}
-  catch(e){alert("הפעולה נכשלה: "+e.message);loadApproveQueue();}
+  const card=$("#card_"+id);
+  const anchor=card?card.nextSibling:null, parent=card?card.parentNode:null;
+  if(card)card.remove();                                   // instant feedback
+  const list=type==="term"?DB.terms:DB.questions;
+  const item=list.find(x=>x.id===id);
+  const prev=item?item.status:null;
+  if(item)item.status=status;                              // keep local state in sync
+  refreshApproveCount();
+  approveBusy(+1);
+  try{
+    await cloudPost({action:"setStatus",type,id,status,note,adminKey:ADMIN});
+  }catch(e){
+    if(item)item.status=prev;                              // roll back
+    if(card&&parent)parent.insertBefore(card,anchor);
+    $$("#approveList [data-app]").forEach(b=>{b.disabled=false;b.onclick=()=>{b.disabled=true;doApprove(b.dataset.type,b.dataset.id,b.dataset.app,b);};});
+    refreshApproveCount();
+    alert("הפעולה נכשלה ובוטלה: "+e.message);
+  }finally{ approveBusy(-1); }
+}
+/* ===== סיכום הגשות לציון =====
+   כל שם ברשימת המגישים מזוכה בהגשה, כך שכל חברי הקבוצה מקבלים קרדיט. */
+function submissionReport(){
+  const by={};
+  const add=(names,kind,status)=>{
+    String(names||"").split(/[,;\/|]+/).map(s=>s.trim()).filter(Boolean).forEach(n=>{
+      const k=n.toLowerCase();
+      by[k]=by[k]||{name:n,termsA:0,termsP:0,qA:0,qP:0,rev:0,rej:0};
+      const r=by[k];
+      if(status==="approved") kind==="term"?r.termsA++:r.qA++;
+      else if(status==="revise") r.rev++;
+      else if(status==="rejected") r.rej++;
+      else kind==="term"?r.termsP++:r.qP++;
+    });
+  };
+  DB.terms.forEach(t=>{ if(t.addedBy&&t.addedBy!=="בסיס") add(t.addedBy,"term",t.status); });
+  DB.questions.forEach(q=>{ if(q.addedBy&&q.addedBy!=="בסיס") add(q.addedBy,"question",q.status); });
+  return Object.values(by).sort((a,b)=>(b.termsA+b.qA)-(a.termsA+a.qA)||a.name.localeCompare(b.name,"he"));
+}
+function renderReport(){
+  const rows=submissionReport();
+  const noName=DB.terms.filter(t=>!t.addedBy).length+DB.questions.filter(q=>!q.addedBy).length;
+  const box=$("#reportBox");
+  if(!rows.length){
+    box.innerHTML=`<div class="card"><b>אין עדיין הגשות עם שם מזוהה.</b>
+      <p class="count" style="margin-top:6px">${noName?`${noName} פריטים הוגשו ללא שם.`:""}</p></div>`;
+    return;
+  }
+  box.innerHTML=`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <b>סיכום הגשות לפי סטודנט</b>
+      <button class="btn ghost sm" id="copyReport">העתק לאקסל</button>
+    </div>
+    <p class="count" style="margin:6px 0 10px">כל חברי קבוצה מזוכים בהגשה. ${noName?`<b style="color:var(--warn)">שימו לב: ${noName} פריטים ללא שם מגיש.</b>`:""}</p>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px">
+      <tr>
+        <th style="text-align:right;border:1px solid var(--line);padding:6px 8px;background:var(--panel2)">סטודנט</th>
+        <th style="border:1px solid var(--line);padding:6px 8px;background:var(--panel2)">מושגים מאושרים</th>
+        <th style="border:1px solid var(--line);padding:6px 8px;background:var(--panel2)">שאלות מאושרות</th>
+        <th style="border:1px solid var(--line);padding:6px 8px;background:var(--panel2)">סה״כ מאושר</th>
+        <th style="border:1px solid var(--line);padding:6px 8px;background:var(--panel2)">ממתין</th>
+        <th style="border:1px solid var(--line);padding:6px 8px;background:var(--panel2)">לתיקון</th>
+        <th style="border:1px solid var(--line);padding:6px 8px;background:var(--panel2)">נדחה</th>
+      </tr>
+      ${rows.map(r=>`<tr>
+        <td style="border:1px solid var(--line);padding:6px 8px"><b>${r.name}</b></td>
+        <td style="border:1px solid var(--line);padding:6px 8px;text-align:center">${r.termsA}</td>
+        <td style="border:1px solid var(--line);padding:6px 8px;text-align:center">${r.qA}</td>
+        <td style="border:1px solid var(--line);padding:6px 8px;text-align:center;color:var(--ok);font-weight:700">${r.termsA+r.qA}</td>
+        <td style="border:1px solid var(--line);padding:6px 8px;text-align:center">${r.termsP+r.qP}</td>
+        <td style="border:1px solid var(--line);padding:6px 8px;text-align:center">${r.rev}</td>
+        <td style="border:1px solid var(--line);padding:6px 8px;text-align:center">${r.rej}</td>
+      </tr>`).join("")}
+    </table></div></div>`;
+  $("#copyReport").onclick=()=>{
+    const tsv=["סטודנט\tמושגים מאושרים\tשאלות מאושרות\tסה\"כ מאושר\tממתין\tלתיקון\tנדחה"]
+      .concat(rows.map(r=>[r.name,r.termsA,r.qA,r.termsA+r.qA,r.termsP+r.qP,r.rev,r.rej].join("\t"))).join("\n");
+    navigator.clipboard.writeText(tsv).then(
+      ()=>{$("#copyReport").textContent="הועתק ✓";setTimeout(()=>$("#copyReport").textContent="העתק לאקסל",1800);},
+      ()=>alert("ההעתקה נכשלה — אפשר לסמן ולהעתיק ידנית."));
+  };
+}
+function refreshApproveCount(){
+  const n=DB.terms.filter(t=>t.status==="pending").length+
+          DB.questions.filter(q=>q.status==="pending").length;
+  $("#approveCount").textContent=n?`${n} ממתינים לאישור`:"אין פריטים ממתינים 🎉";
 }
 
 /* ============ INIT ============ */
