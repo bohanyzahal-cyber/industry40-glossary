@@ -729,6 +729,27 @@ function myName(){
   if(b){PARTNERS=b.value.trim();lsSet(PKEY,PARTNERS);}
   return [UNAME,PARTNERS].filter(Boolean).join(", ");
 }
+/* Re-submitting a returned item through the normal add form used to create a
+   second row alongside the original. Catch that before it reaches the sheet. */
+function norm(s){return String(s||"").replace(/[\s"'׳״.,־–—]+/g," ").trim().toLowerCase();}
+function duplicateOf(kind,text){
+  const list=kind==="term"?DB.terms:DB.questions;
+  const key=norm(text);
+  if(!key)return null;
+  return list.find(x=>x.status!=="rejected" && norm(kind==="term"?x.he:x.q)===key)||null;
+}
+function blockDuplicate(kind,text){
+  const dup=duplicateOf(kind,text);
+  if(!dup)return false;
+  const what=kind==="term"?"מושג":"שאלה";
+  if(dup.status==="revise"){
+    alert(`ה${what} הזה כבר הוגש והמרצה החזיר אותו לתיקון.\n\nאל תגישו אותו מחדש כאן — עברו לטאב "ההצעות שלי" ולחצו "✎ ערוך ושלח מחדש", כדי שהתיקון יחליף את ההגשה הקיימת ולא ייווצר כפל.`);
+  }else{
+    const st={approved:"כבר אושר",pending:"כבר הוגש וממתין לאישור"}[dup.status]||"כבר קיים";
+    alert(`ה${what} הזה ${st}.\n\nאם ברצונכם לשנות אותו — פנו למרצה, או המתינו שיחזיר אותו לתיקון.`);
+  }
+  return true;
+}
 // a submission with no name cannot be graded, so block it at the source
 function requireName(){
   const byline=myName();
@@ -763,6 +784,7 @@ function delQ(id){
 $("#addTerm").onclick=async()=>{
   const he=$("#t_he").value.trim();if(!he){alert("חסר מונח בעברית");return;}
   const who=requireName(); if(!who)return;
+  if(!(FIXING&&FIXING.kind==="term")&&blockDuplicate("term",he))return;
   const data={he,en:$("#t_en").value.trim(),short:$("#t_short").value.trim(),long:$("#t_long").value.trim(),
     ex:$("#t_ex").value.trim(),topic:$("#t_topic").value.trim()||"כללי",week:$("#t_week").value.trim()||"1"};
   if(CLOUD){
@@ -794,6 +816,7 @@ $("#addQ").onclick=async()=>{
   if(opts.some(o=>/כל התשובות|אף תשובה|כל הנ"?ל|אף אחת מהתשובות/.test(o))){
     alert('לא להשתמש ב"כל התשובות נכונות" / "אף תשובה". צריכה להיות תשובה נכונה אחת בלבד.');return;}
   const who=requireName(); if(!who)return;
+  if(!(FIXING&&FIXING.kind==="question")&&blockDuplicate("question",qt))return;
   const data={term:$("#q_term").value,q:qt,opts,correct:0,exp:$("#q_exp").value.trim()};
   if(CLOUD){
     const fixing=FIXING&&FIXING.kind==="question"?FIXING.id:null;
