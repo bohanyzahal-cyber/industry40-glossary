@@ -1172,6 +1172,18 @@ $("#mineRefresh").onclick=async()=>{if(CLOUD)await syncCloud();renderMine();};
 updateMineBadge();
 if(isApproveMode()){initApprove();}
 else if(CLOUD)syncCloud(); else cloudStatus("לא מחובר (עובד מקומית)");
+
+/* A tab left open for hours would keep showing yesterday's glossary. Re-sync
+   when the student returns to it — throttled, so switching tabs repeatedly
+   does not hammer the backend, and skipped mid-quiz so answers are not lost. */
+let lastSync=Date.now();
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden||!CLOUD||isApproveMode())return;
+  if(quiz&&!$("#quizRun").classList.contains("hidden"))return;   // don't disturb a quiz in progress
+  if(Date.now()-lastSync<60000)return;                           // at most once a minute
+  lastSync=Date.now();
+  syncCloud();
+});
 </script>
 </body>
 </html>
