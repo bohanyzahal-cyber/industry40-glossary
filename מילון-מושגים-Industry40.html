@@ -542,15 +542,12 @@ async function cloudPost(payload){
   if(!j.ok)throw new Error(j.error||"שגיאה לא ידועה");
   return j;
 }
-/** SEED = בסיס אופליין; הענן מתווסף מעליו (ומנצח בהתנגשות מזהים) */
+/* SEED משמש רק כשאין חיבור לשרת. ברגע שהסנכרון מצליח השרת הוא מקור האמת
+   היחיד — אחרת פריט שהשרת מנע (למשל מושג שטרם אושר) היה ממשיך להופיע
+   מתוך העותק המוטמע בקוד, ומסומן בו כמאושר. */
 function mergeCloud(j){
-  const tm=new Map();
-  SEED.terms.forEach(t=>tm.set(t.id,Object.assign({},t,{status:"approved",origin:"seed"})));
-  (j.terms||[]).forEach(t=>tm.set(String(t.id),Object.assign({},t,{origin:"cloud"})));
-  const qm=new Map();
-  SEED.questions.forEach(q=>qm.set(q.id,Object.assign({},q,{origin:"seed"})));
-  (j.questions||[]).forEach(q=>qm.set(String(q.id),Object.assign({},q,{origin:"cloud"})));
-  DB.terms=[...tm.values()];DB.questions=[...qm.values()];
+  DB.terms=(j.terms||[]).map(t=>Object.assign({},t,{id:String(t.id),origin:"cloud"}));
+  DB.questions=(j.questions||[]).map(q=>Object.assign({},q,{id:String(q.id),origin:"cloud"}));
   save();
 }
 async function syncCloud(){
