@@ -788,7 +788,7 @@ $("#addTerm").onclick=async()=>{
     const fixing=FIXING&&FIXING.kind==="term"?FIXING.id:null;
     try{
       if(fixing){
-        await cloudPost({action:"updateItem",type:"term",id:fixing,data,addedBy:who});
+        await cloudPost({action:"updateItem",type:"term",id:fixing,data,addedBy:who,me:UNAME});
         await syncCloud();clearFix();alert("התיקון נשלח וחזר לתור האישור של המרצה.");
       }else{
         await cloudPost({action:"addTerm",data,addedBy:who});await syncCloud();
@@ -819,7 +819,7 @@ $("#addQ").onclick=async()=>{
     const fixing=FIXING&&FIXING.kind==="question"?FIXING.id:null;
     try{
       if(fixing){
-        await cloudPost({action:"updateItem",type:"question",id:fixing,data,addedBy:who});
+        await cloudPost({action:"updateItem",type:"question",id:fixing,data,addedBy:who,me:UNAME});
         await syncCloud();clearFix();alert("התיקון נשלח וחזר לתור האישור של המרצה.");
       }else{
         await cloudPost({action:"addQuestion",data,addedBy:who});await syncCloud();
@@ -916,8 +916,12 @@ function mineCard(x){
     ? `<div class="term-he" style="font-size:15px">${it.q}</div><div class="count" style="margin-top:4px">✔ ${it.opts[it.correct]}</div>`
     : `<div class="term-head"><span class="term-he">${it.he}</span><span class="term-en">${it.en||""}</span></div><div class="short">${it.short||""}</div>`;
   const note = it.note ? `<div class="notebox"><b>הערת המרצה:</b> ${it.note}</div>` : "";
-  const fix = st==="revise"
-    ? `<div style="margin-top:10px"><button class="btn sm" data-fix="${it.id}" data-kind="${x.kind}">✎ ערוך ושלח מחדש</button></div>` : "";
+  // editable until the lecturer decides — either returned for revision, or still waiting
+  const fix = (st==="revise"||st==="pending")
+    ? `<div style="margin-top:10px">
+         <button class="btn sm" data-fix="${it.id}" data-kind="${x.kind}">✎ ${st==="revise"?"ערוך ושלח מחדש":"ערוך"}</button>
+         ${st==="pending"?`<span class="count" style="margin-inline-start:8px">ניתן לתקן כל עוד המרצה לא אישר</span>`:""}
+       </div>` : "";
   return `<div class="card">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">
       <span class="chip">${x.kind==="question"?"שאלה":"מושג"}</span>

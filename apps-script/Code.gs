@@ -206,8 +206,9 @@ function doPost(e) {
       return json_({ ok: false, error: 'מזהה לא נמצא' });
     }
 
-    /** תיקון והגשה מחדש ע"י המגישים.
-     *  מותר אך ורק לפריט שהמרצה סימן "לתיקון" — כך שאי אפשר לגעת בתוכן מאושר. */
+    /** עריכה והגשה מחדש ע"י המגישים.
+     *  מותר לפריט שטרם הוכרע — "ממתין" או "לתיקון" — ולעולם לא לתוכן שאושר
+     *  או נדחה. בפריט שממתין נדרשת גם התאמת שם, כדי שאדם לא יערוך הגשה של אחר. */
     if (action === 'updateItem') {
       const isTerm = body.type === 'term';
       const sheetName = isTerm ? SHEET_TERMS : SHEET_QUESTIONS;
@@ -216,11 +217,19 @@ function doPost(e) {
       const head = data[0];
       const idCol = head.indexOf('id');
       const stCol = head.indexOf('status');
+      const byCol0 = head.indexOf('addedBy');
       const d = body.data || {};
       for (let i = 1; i < data.length; i++) {
         if (String(data[i][idCol]) !== String(body.id)) continue;
-        if (statusOut_(data[i][stCol]) !== 'revise') {
-          return json_({ ok: false, error: 'ניתן לערוך רק פריט שהוחזר לתיקון' });
+        const cur = statusOut_(data[i][stCol]);
+        if (cur !== 'revise' && cur !== 'pending') {
+          return json_({ ok: false, error: 'ניתן לערוך רק הגשה שטרם הוכרעה' });
+        }
+        if (cur === 'pending') {
+          const owner = byCol0 === -1 ? '' : data[i][byCol0];
+          if (!ownedBy_({ addedBy: owner }, body.me)) {
+            return json_({ ok: false, error: 'ניתן לערוך רק הגשה שאתם רשומים בה' });
+          }
         }
         const vals = isTerm
           ? { he: d.he, en: d.en, short: d.short, long: d.long, ex: d.ex, topic: d.topic, week: d.week }
