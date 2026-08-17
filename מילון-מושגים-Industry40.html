@@ -580,8 +580,11 @@ $$("nav button").forEach(b=>b.onclick=()=>{
 /* ============ GLOSSARY ============ */
 function topics(){return [...new Set(DB.terms.map(t=>t.topic))].sort();}
 function fillTopicSelects(){
-  const opts='<option value="">כל הנושאים</option>'+topics().map(t=>`<option>${t}</option>`).join("");
-  $("#gtopic").innerHTML=opts;$("#qtopic").innerHTML=opts;
+  const mk=list=>'<option value="">כל הנושאים</option>'+list.map(t=>`<option>${t}</option>`).join("");
+  $("#gtopic").innerHTML=mk(topics());
+  /* רשימת הנושאים בתרגול נבנית גם מהשאלות עצמן: שאלה שאין לה מושג מאושר
+     משתייכת ל"כללי", אחרת היא לא מופיעה באף סינון לפי נושא */
+  $("#qtopic").innerHTML=mk([...new Set([...topics(),...approvedQs().map(topicOfQ)])].sort());
 }
 function renderGlossary(){
   const q=$("#gsearch").value.trim().toLowerCase(), tp=$("#gtopic").value;
@@ -611,11 +614,12 @@ let quiz=null;
 function approvedQs(){return DB.questions.filter(q=>q.status==="approved");}
 function updateAvail(){
   const tp=$("#qtopic").value;
-  const n=approvedQs().filter(q=>!tp||termOf(q).topic===tp).length;
+  const n=approvedQs().filter(q=>!tp||topicOfQ(q)===tp).length;
   const pend=DB.questions.filter(q=>q.status==="pending").length;
   $("#qavail").textContent=`זמינות לתרגול: ${n} שאלות מאושרות${pend?` · ${pend} ממתינות לאישור`:""}`;
 }
 function termOf(q){return DB.terms.find(t=>t.id===q.term)||{topic:"",he:""};}
+function topicOfQ(q){return termOf(q).topic||"כללי";}
 // visible in the glossary = approved, or a base/local term with no status (offline)
 function termVisible(t){return !!t&&(!t.status||t.status==="approved");}
 $("#qtopic").onchange=updateAvail;
@@ -623,7 +627,7 @@ function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor
 
 $("#qstart").onclick=()=>{
   const tp=$("#qtopic").value, mode=$("#qmode").value, numSel=$("#qnum").value;
-  let pool=approvedQs().filter(q=>!tp||termOf(q).topic===tp);
+  let pool=approvedQs().filter(q=>!tp||topicOfQ(q)===tp);
   if(!pool.length){alert("אין שאלות מאושרות בנושא זה.");return;}
   pool=shuffle(pool);
   const num=numSel==="all"?pool.length:Math.min(+numSel,pool.length);
@@ -635,7 +639,7 @@ function renderQ(){
   const it=quiz.items[quiz.i], q=it.q;
   $("#qbar").style.width=(quiz.i/quiz.items.length*100)+"%";
   $("#qidx").textContent=`שאלה ${quiz.i+1} מתוך ${quiz.items.length}`;
-  $("#qtopiclbl").textContent=termOf(q).topic;
+  $("#qtopiclbl").textContent=topicOfQ(q);
   $("#qtext").textContent=q.q;
   $("#qfeed").classList.add("hidden");
   $("#qnext").textContent=quiz.i===quiz.items.length-1?"סיום":"הבא ←";
