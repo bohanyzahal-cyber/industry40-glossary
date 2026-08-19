@@ -28,6 +28,8 @@
   .btn:hover{filter:brightness(1.08)}
   .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
   .btn.sm{padding:5px 10px;font-size:12px}
+  .btn:disabled{opacity:.4;cursor:default}
+  .btn:disabled:hover{filter:none}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
   .term-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;cursor:pointer}
   .term-he{font-size:17px;font-weight:700}
@@ -224,7 +226,10 @@
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:14px">
         <button class="btn ghost sm" id="qquit">יציאה</button>
-        <button class="btn" id="qnext">הבא ←</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost" id="qprev">→ הקודם</button>
+          <button class="btn" id="qnext">הבא ←</button>
+        </div>
       </div>
     </div>
 
@@ -642,18 +647,25 @@ function renderQ(){
   $("#qtopiclbl").textContent=topicOfQ(q);
   $("#qtext").textContent=q.q;
   $("#qfeed").classList.add("hidden");
+  $("#qprev").disabled=quiz.i===0;
   $("#qnext").textContent=quiz.i===quiz.items.length-1?"סיום":"הבא ←";
   $("#qopts").innerHTML=it.order.map((oi,pos)=>`<button class="opt" data-oi="${oi}" data-pos="${pos}">${q.opts[oi]}</button>`).join("");
   $$("#qopts .opt").forEach(b=>b.onclick=()=>choose(b));
-  if(it.answer!==null)lockAnswer(it);
+  // חזרה לשאלה שכבר נענתה: בתרגול המשוב נחשף מחדש; במבחן רק מסומנת הבחירה
+  if(it.answer!==null){quiz.mode==="practice"?lockAnswer(it):markChoice(it);}
+}
+function markChoice(it){
+  $$("#qopts .opt").forEach(b=>{b.style.borderColor=+b.dataset.oi===it.answer?"var(--accent)":"";});
 }
 function choose(btn){
-  const it=quiz.items[quiz.i];if(it.answer!==null)return;
-  it.answer=+btn.dataset.oi;
-  if(quiz.mode==="practice")lockAnswer(it);
-  else{ // exam: mark selected, no reveal
-    $$("#qopts .opt").forEach(b=>b.classList.add("disabled"));
-    btn.style.borderColor="var(--accent)";
+  const it=quiz.items[quiz.i];
+  if(quiz.mode==="practice"){
+    if(it.answer!==null)return;      // המשוב כבר נחשף — הבחירה נעולה
+    it.answer=+btn.dataset.oi;
+    lockAnswer(it);
+  }else{                             // מבחן: אפשר לשנות את הבחירה עד הסיום
+    it.answer=+btn.dataset.oi;
+    markChoice(it);
   }
 }
 function lockAnswer(it){
@@ -670,10 +682,13 @@ function lockAnswer(it){
     (t.he&&termVisible(t)?`<a onclick="gotoTerm('${q.term}')">↗ למושג: ${t.he}</a>`:"");
   $("#qfeed").classList.remove("hidden");
 }
+$("#qprev").onclick=()=>{if(quiz.i>0){quiz.i--;renderQ();}};
 $("#qnext").onclick=()=>{
-  const it=quiz.items[quiz.i];
-  if(it.answer===null){alert("בחר תשובה.");return;}
-  if(quiz.i<quiz.items.length-1){quiz.i++;renderQ();}else finishQuiz();
+  if(quiz.i<quiz.items.length-1){quiz.i++;renderQ();return;}
+  // אפשר לדלג ולחזור; שאלה שנותרה בלי תשובה נספרת כטעות בסיום
+  const open=quiz.items.filter(it=>it.answer===null).length;
+  if(open&&!confirm(`נותרו ${open} שאלות ללא תשובה — לסיים בכל זאת?`))return;
+  finishQuiz();
 };
 $("#qquit").onclick=()=>{$("#quizRun").classList.add("hidden");$("#quizSetup").classList.remove("hidden");updateAvail();};
 function finishQuiz(){
