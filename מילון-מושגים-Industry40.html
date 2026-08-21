@@ -352,6 +352,13 @@
       </div>
       <div id="reportBox" class="hidden"></div>
       <div id="approveList"></div>
+      <div class="card" style="margin-top:18px">
+        <b>מאושרים — עריכה והחזרה</b>
+        <p class="count" style="margin:4px 0 10px">תיקון פריט שכבר אושר, או החזרתו לתור אם אושר בטעות. עריכה כאן נשמרת ישירות והפריט נשאר מאושר.</p>
+        <input id="appSearch" style="width:100%" placeholder="חיפוש במושגים ובשאלות שאושרו…">
+        <p class="count" id="approvedCount" style="margin:8px 0 0"></p>
+        <div id="approvedList" style="margin-top:6px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -993,6 +1000,7 @@ function initApprove(){
   $("#approveView").classList.remove("hidden");
   $("#approveLogin").onclick=approveLogin;
   $("#approveRefresh").onclick=loadApproveQueue;
+  $("#appSearch").oninput=()=>{renderApprovedList();bindApproveActions();};
   $("#reportBtn").onclick=()=>{
     const b=$("#reportBox");
     if(b.classList.contains("hidden")){renderReport();b.classList.remove("hidden");$("#reportBtn").textContent="✕ סגור סיכום";}
@@ -1030,15 +1038,35 @@ async function loadApproveQueue(){
       <div style="margin-top:10px"><button class="btn sm" onclick="location.reload(true)">רענן את הדף</button></div></div>`;
     return;
   }
+  renderApproveLists();
+}
+function renderApproveLists(){
   const pend=[].concat(
     DB.terms.filter(t=>t.status==="pending").map(t=>({kind:"term",item:t})),
     DB.questions.filter(q=>q.status==="pending").map(q=>({kind:"question",item:q}))
   );
   refreshApproveCount();
   $("#approveList").innerHTML=pend.map(approveCard).join("");
-  $$("#approveList [data-app]").forEach(b=>b.onclick=()=>{
+  renderApprovedList();
+  bindApproveActions();
+}
+function renderApprovedList(){
+  const qy=norm($("#appSearch").value);
+  const all=[].concat(
+    DB.terms.filter(t=>t.status==="approved").map(t=>({kind:"term",item:t})),
+    DB.questions.filter(x=>x.status==="approved").map(x=>({kind:"question",item:x}))
+  ).reverse();   // האחרונים שאושרו קודם — שם לרוב הטעות שמחפשים
+  const hits=qy?all.filter(x=>norm(x.kind==="term"?[x.item.he,x.item.en].join(" "):x.item.q).includes(qy)):all;
+  $("#approvedCount").textContent=`${all.length} פריטים מאושרים${qy?` · ${hits.length} תואמים לחיפוש`:""}`;
+  const MAX=30;
+  $("#approvedList").innerHTML=hits.slice(0,MAX).map(approvedCard).join("")+
+    (hits.length>MAX?`<p class="count">מוצגים ${MAX} מתוך ${hits.length} — צמצמו בחיפוש.</p>`:"");
+}
+function bindApproveActions(){
+  $$("#approveView [data-app]").forEach(b=>b.onclick=()=>{
     b.disabled=true;doApprove(b.dataset.type,b.dataset.id,b.dataset.app,b);
   });
+  $$("#approveView [data-aedit]").forEach(b=>b.onclick=()=>adminEdit(b.dataset.type,b.dataset.aedit));
 }
 function approveCard(x){
   const it=x.item;
@@ -1063,10 +1091,108 @@ function approveCard(x){
       <input class="reasonBox hidden" id="reason_${it.id}" style="width:100%" placeholder="סיבת ההחזרה / מה צריך לתקן — יוצג למגישים">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <button class="btn sm" data-app="approved" data-type="${x.kind}" data-id="${it.id}">✔ אשר</button>
+        <button class="btn ghost sm" data-aedit="${it.id}" data-type="${x.kind}">✎ ערוך</button>
         <button class="btn ghost sm" data-app="revise" data-type="${x.kind}" data-id="${it.id}">↩ החזר לתיקון</button>
         <button class="btn ghost sm" data-app="rejected" data-type="${x.kind}" data-id="${it.id}">✖ דחה סופית</button>
       </div>
     </div></div>`;
+}
+/* כרטיס מצומצם לפריט מאושר — עריכה, החזרה לתור, החזרה לתיקון או דחייה */
+function approvedCard(x){
+  const it=x.item;
+  const who=it.addedBy?`<span class="chip">הוצע ע״י: ${it.addedBy}</span>`:"";
+  const head=x.kind==="question"
+    ? `<div class="term-he" style="font-size:15px">${it.q}</div><div class="count" style="margin-top:4px">✔ ${it.opts[it.correct]}</div>`
+    : `<div class="term-head"><span class="term-he">${it.he}</span><span class="term-en">${it.en||""}</span></div><div class="short">${it.short||""}</div>`;
+  return `<div class="card" id="card_${it.id}">${head}
+    <div class="chips" style="margin-top:6px"><span class="chip">${x.kind==="question"?"שאלה":"מושג"}</span>${who}</div>
+    <div style="margin-top:10px">
+      <input class="reasonBox hidden" id="reason_${it.id}" style="width:100%" placeholder="סיבת ההחזרה / מה צריך לתקן — יוצג למגישים">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn sm" data-aedit="${it.id}" data-type="${x.kind}">✎ ערוך</button>
+        <button class="btn ghost sm" data-app="pending" data-type="${x.kind}" data-id="${it.id}">⏪ החזר לממתין</button>
+        <button class="btn ghost sm" data-app="revise" data-type="${x.kind}" data-id="${it.id}">↩ החזר לתיקון</button>
+        <button class="btn ghost sm" data-app="rejected" data-type="${x.kind}" data-id="${it.id}">✖ דחה</button>
+      </div>
+    </div></div>`;
+}
+/* עריכת מנהל בתוך הכרטיס — נשמרת ישירות לגיליון בלי לשנות סטטוס או מגישים */
+function adminEdit(kind,id){
+  const card=$("#card_"+id);
+  const it=(kind==="term"?DB.terms:DB.questions).find(x=>x.id===id);
+  if(!card||!it)return;
+  const F='style="width:100%;margin-bottom:8px"';
+  const stLbl=ST_LABEL[it.status]||it.status;
+  if(kind==="term"){
+    card.innerHTML=`<b>עריכת מושג</b>
+      <label class="lbl">מונח בעברית</label><input data-f="he" ${F}>
+      <label class="lbl">מונח באנגלית</label><input data-f="en" ${F}>
+      <label class="lbl">הגדרה קצרה</label><textarea data-f="short" rows="2" ${F}></textarea>
+      <label class="lbl">הסבר מלא</label><textarea data-f="long" rows="3" ${F}></textarea>
+      <label class="lbl">דוגמה</label><textarea data-f="ex" rows="2" ${F}></textarea>
+      <label class="lbl">נושא</label><input data-f="topic" ${F}>
+      <label class="lbl">שבוע</label><input data-f="week" type="number" min="1" ${F}>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn sm" data-asave>💾 שמור (נשאר ${stLbl})</button>
+        <button class="btn ghost sm" data-acancel>ביטול</button>
+      </div>`;
+    const f=n=>card.querySelector(`[data-f="${n}"]`);
+    f("he").value=it.he||"";f("en").value=it.en||"";f("short").value=it.short||"";
+    f("long").value=it.long||"";f("ex").value=it.ex||"";f("topic").value=it.topic||"";
+    f("week").value=it.week||1;
+  }else{
+    card.innerHTML=`<b>עריכת שאלה</b>
+      <label class="lbl">שאלה</label><textarea data-f="q" rows="2" ${F}></textarea>
+      ${[0,1,2,3].map(i=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+         <input type="radio" name="aec_${id}" value="${i}" title="זו התשובה הנכונה">
+         <input data-f="opt${i}" style="flex:1" placeholder="תשובה ${i+1}">
+       </div>`).join("")}
+      <p class="count" style="margin:0 0 8px">סמנו את העיגול שליד התשובה הנכונה.</p>
+      <label class="lbl">הסבר (מוצג אחרי מענה)</label><textarea data-f="exp" rows="2" ${F}></textarea>
+      <label class="lbl">קשור למושג</label><select data-f="term" ${F}>
+        <option value="">— כללי / ללא מושג —</option>
+        ${DB.terms.filter(t=>t.status!=="rejected").map(t=>`<option value="${t.id}">${t.he}${t.status==="pending"?" (ממתין לאישור)":""}</option>`).join("")}
+      </select>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn sm" data-asave>💾 שמור (נשאר ${stLbl})</button>
+        <button class="btn ghost sm" data-acancel>ביטול</button>
+      </div>`;
+    const f=n=>card.querySelector(`[data-f="${n}"]`);
+    f("q").value=it.q||"";[0,1,2,3].forEach(i=>f("opt"+i).value=it.opts[i]||"");
+    const r=card.querySelector(`input[name="aec_${id}"][value="${it.correct}"]`);if(r)r.checked=true;
+    f("exp").value=it.exp||"";f("term").value=it.term||"";
+  }
+  card.querySelector("[data-acancel]").onclick=()=>renderApproveLists();
+  card.querySelector("[data-asave]").onclick=async ev=>{
+    const f=n=>card.querySelector(`[data-f="${n}"]`);
+    let data;
+    if(kind==="term"){
+      data={he:f("he").value.trim(),en:f("en").value.trim(),short:f("short").value.trim(),
+            long:f("long").value.trim(),ex:f("ex").value.trim(),
+            topic:f("topic").value.trim()||"כללי",week:+f("week").value||1};
+      if(!data.he){alert("חסר המונח בעברית.");return;}
+    }else{
+      const opts=[0,1,2,3].map(i=>f("opt"+i).value.trim());
+      const sel=card.querySelector(`input[name="aec_${id}"]:checked`);
+      if(!f("q").value.trim()){alert("חסרה השאלה.");return;}
+      if(opts.some(o=>!o)){alert("יש למלא את כל 4 התשובות.");return;}
+      if(!sel){alert("סמנו איזו תשובה נכונה.");return;}
+      data={q:f("q").value.trim(),opts,correct:+sel.value,exp:f("exp").value.trim(),term:f("term").value};
+    }
+    ev.target.disabled=true;
+    approveBusy(+1);
+    try{
+      await cloudPost({action:"updateItem",type:kind,id,data,adminKey:ADMIN});
+      Object.assign(it,data);
+      save();
+      renderApproveLists();
+    }catch(e){
+      let m=e.message;
+      if(/שטרם הוכרעה|רשומים בה/.test(m))m+="\n\nנראה שגרסת השרת ישנה — פרסמו מחדש את Code.gs (Deploy → Manage deployments → New version).";
+      alert("השמירה נכשלה: "+m);
+      ev.target.disabled=false;
+    }finally{approveBusy(-1);}
+  };
 }
 /* The card disappears immediately and the request is sent in the background,
    so the lecturer never waits for the round-trip. A failure restores the card. */
@@ -1094,7 +1220,6 @@ async function doApprove(type,id,status,btn){
     }
   }
   const card=$("#card_"+id);
-  const anchor=card?card.nextSibling:null, parent=card?card.parentNode:null;
   if(card)card.remove();                                   // instant feedback
   const list=type==="term"?DB.terms:DB.questions;
   const item=list.find(x=>x.id===id);
@@ -1104,11 +1229,11 @@ async function doApprove(type,id,status,btn){
   approveBusy(+1);
   try{
     await cloudPost({action:"setStatus",type,id,status,note,adminKey:ADMIN});
+    if(status==="pending")renderApproveLists();            // הפריט חזר לתור — מופיע שוב בממתינים
+    else if(prev==="approved"){renderApprovedList();bindApproveActions();}
   }catch(e){
     if(item)item.status=prev;                              // roll back
-    if(card&&parent)parent.insertBefore(card,anchor);
-    $$("#approveList [data-app]").forEach(b=>{b.disabled=false;b.onclick=()=>{b.disabled=true;doApprove(b.dataset.type,b.dataset.id,b.dataset.app,b);};});
-    refreshApproveCount();
+    renderApproveLists();
     alert("הפעולה נכשלה ובוטלה: "+e.message);
   }finally{ approveBusy(-1); }
 }

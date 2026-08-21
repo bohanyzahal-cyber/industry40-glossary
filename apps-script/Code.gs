@@ -206,10 +206,16 @@ function doPost(e) {
       return json_({ ok: false, error: 'מזהה לא נמצא' });
     }
 
-    /** עריכה והגשה מחדש ע"י המגישים.
-     *  מותר לפריט שטרם הוכרע — "ממתין" או "לתיקון" — ולעולם לא לתוכן שאושר
-     *  או נדחה. בפריט שממתין נדרשת גם התאמת שם, כדי שאדם לא יערוך הגשה של אחר. */
+    /** עריכה. שני מסלולים:
+     *  - מגישים: מותר לפריט שטרם הוכרע — "ממתין" או "לתיקון" — ולעולם לא לתוכן
+     *    שאושר או נדחה. בפריט שממתין נדרשת גם התאמת שם, כדי שאדם לא יערוך
+     *    הגשה של אחר. השליחה מחזירה את הפריט ל"ממתין" (לתור האישור).
+     *  - מנהל (adminKey תקין): מותר לערוך כל פריט בכל סטטוס. הסטטוס והמגישים
+     *    אינם משתנים — תיקון של המרצה במאושר משאיר אותו מאושר. */
     if (action === 'updateItem') {
+      const key = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+      const isAdmin = !!body.adminKey && !!key && body.adminKey === key;
+      if (body.adminKey && !isAdmin) return json_({ ok: false, error: 'קוד מנהל שגוי' });
       const isTerm = body.type === 'term';
       const sheetName = isTerm ? SHEET_TERMS : SHEET_QUESTIONS;
       const sh = ensureSheet_(ss, sheetName, isTerm ? TERM_HEADERS : QUESTION_HEADERS);
@@ -222,13 +228,15 @@ function doPost(e) {
       for (let i = 1; i < data.length; i++) {
         if (String(data[i][idCol]) !== String(body.id)) continue;
         const cur = statusOut_(data[i][stCol]);
-        if (cur !== 'revise' && cur !== 'pending') {
-          return json_({ ok: false, error: 'ניתן לערוך רק הגשה שטרם הוכרעה' });
-        }
-        if (cur === 'pending') {
-          const owner = byCol0 === -1 ? '' : data[i][byCol0];
-          if (!ownedBy_({ addedBy: owner }, body.me)) {
-            return json_({ ok: false, error: 'ניתן לערוך רק הגשה שאתם רשומים בה' });
+        if (!isAdmin) {
+          if (cur !== 'revise' && cur !== 'pending') {
+            return json_({ ok: false, error: 'ניתן לערוך רק הגשה שטרם הוכרעה' });
+          }
+          if (cur === 'pending') {
+            const owner = byCol0 === -1 ? '' : data[i][byCol0];
+            if (!ownedBy_({ addedBy: owner }, body.me)) {
+              return json_({ ok: false, error: 'ניתן לערוך רק הגשה שאתם רשומים בה' });
+            }
           }
         }
         const vals = isTerm
@@ -239,13 +247,13 @@ function doPost(e) {
           const c = head.indexOf(k);
           if (c !== -1 && vals[k] !== undefined) sh.getRange(i + 1, c + 1).setValue(vals[k]);
         });
-        if (body.addedBy) {
+        if (!isAdmin && body.addedBy) {
           const byCol = head.indexOf('addedBy');
           if (byCol !== -1) sh.getRange(i + 1, byCol + 1).setValue(body.addedBy);
         }
         const tsCol = head.indexOf('timestamp');
         if (tsCol !== -1) sh.getRange(i + 1, tsCol + 1).setValue(new Date());
-        sh.getRange(i + 1, stCol + 1).setValue(STATUS_PENDING);  // חוזר לתור האישור
+        if (!isAdmin) sh.getRange(i + 1, stCol + 1).setValue(STATUS_PENDING);  // חוזר לתור האישור
         return json_({ ok: true });
       }
       return json_({ ok: false, error: 'מזהה לא נמצא' });
