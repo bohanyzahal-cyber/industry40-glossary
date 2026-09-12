@@ -103,14 +103,18 @@ function readAll_() {
   return { terms: terms, questions: questions };
 }
 
+/** השוואת שמות: רווחים כפולים ורישיות לא אמורים לנתק אדם מההגשה שלו */
+function normName_(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 /** האם השם 'me' מופיע ברשימת המגישים של הפריט */
 function ownedBy_(item, me) {
-  if (!me) return false;
-  const target = String(me).trim().toLowerCase();
+  const target = normName_(me);
   if (!target) return false;
-  return String(item.addedBy || '').toLowerCase()
-    .split(/[,;\/|]+/)
-    .some(function (n) { return n.trim() === target; });
+  return String(item.addedBy || '')
+    .split(/[,،;\/|]+/)
+    .some(function (n) { return normName_(n) === target; });
 }
 
 /**
@@ -254,6 +258,38 @@ function doPost(e) {
         const tsCol = head.indexOf('timestamp');
         if (tsCol !== -1) sh.getRange(i + 1, tsCol + 1).setValue(new Date());
         if (!isAdmin) sh.getRange(i + 1, stCol + 1).setValue(STATUS_PENDING);  // חוזר לתור האישור
+        return json_({ ok: true });
+      }
+      return json_({ ok: false, error: 'מזהה לא נמצא' });
+    }
+
+    /** מחיקת הגשה ע"י המגישים — הדרך הנכונה להסיר כפל הגשה.
+     *  מותר רק לפריט שטרם אושר ("ממתין" או "לתיקון") ורק למי שרשום בו.
+     *  תוכן שאושר או נדחה לעולם אינו נמחק מהאתר. מנהל עם קוד תקין מוחק הכול. */
+    if (action === 'deleteItem') {
+      const key = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+      const isAdmin = !!body.adminKey && !!key && body.adminKey === key;
+      if (body.adminKey && !isAdmin) return json_({ ok: false, error: 'קוד מנהל שגוי' });
+      const isTerm = body.type === 'term';
+      const sheetName = isTerm ? SHEET_TERMS : SHEET_QUESTIONS;
+      const sh = ensureSheet_(ss, sheetName, isTerm ? TERM_HEADERS : QUESTION_HEADERS);
+      const data = sh.getDataRange().getValues();
+      const head = data[0];
+      const idCol = head.indexOf('id');
+      const stCol = head.indexOf('status');
+      const byCol = head.indexOf('addedBy');
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][idCol]) !== String(body.id)) continue;
+        if (!isAdmin) {
+          const cur = statusOut_(data[i][stCol]);
+          if (cur !== 'pending' && cur !== 'revise') {
+            return json_({ ok: false, error: 'ניתן למחוק רק הגשה שהמרצה טרם אישר' });
+          }
+          if (!ownedBy_({ addedBy: byCol === -1 ? '' : data[i][byCol] }, body.me)) {
+            return json_({ ok: false, error: 'ניתן למחוק רק הגשה שאתם רשומים בה' });
+          }
+        }
+        sh.deleteRow(i + 1);
         return json_({ ok: true });
       }
       return json_({ ok: false, error: 'מזהה לא נמצא' });

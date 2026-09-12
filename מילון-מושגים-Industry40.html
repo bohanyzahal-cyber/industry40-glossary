@@ -238,7 +238,7 @@
 
   <!-- ============ MY SUBMISSIONS ============ -->
   <section id="mine" class="hidden">
-    <div class="note">כאן מופיעות ההצעות שהגשתם, לפי השם שרשמתם בטאב "ניהול והוספה". פריט שהמרצה החזיר לתיקון מוצג עם הערתו וניתן לערוך אותו ולשלוח מחדש.</div>
+    <div class="note">כאן מופיעות ההצעות שהגשתם, לפי השם שרשמתם בטאב "ניהול והוספה". כל עוד המרצה לא אישר — אפשר <b>לערוך</b> או <b>למחוק</b> הגשה. הגשתם משהו פעמיים? מחקו כאן את הכפילות במקום להגיש שוב. פריט שהמרצה החזיר לתיקון מוצג עם הערתו.</div>
     <div class="toolbar">
       <button class="btn ghost sm" id="mineRefresh">רענן</button>
       <span class="count" id="mineCount"></span>
@@ -784,10 +784,12 @@ function requireName(){
   return "";
 }
 // does this submission belong to me? matches my personal name inside the byline
+// same comparison the server uses, so a stray double space never hides your own submission
+function normName(s){return String(s||"").replace(/\s+/g," ").trim().toLowerCase();}
 function isMine(x){
-  const me=(UNAME||"").trim().toLowerCase();
+  const me=normName(UNAME);
   if(!me)return false;
-  return String(x.addedBy||"").toLowerCase().split(/[,،;/|]+/).map(s=>s.trim()).includes(me);
+  return String(x.addedBy||"").split(/[,،;/|]+/).some(n=>normName(n)===me);
 }
 async function approveQ(id){
   const q=DB.questions.find(x=>x.id===id);if(!q)return;
@@ -810,6 +812,7 @@ $("#addTerm").onclick=async()=>{
   if(!(FIXING&&FIXING.kind==="term")&&blockDuplicate("term",he))return;
   const data={he,en:$("#t_en").value.trim(),short:$("#t_short").value.trim(),long:$("#t_long").value.trim(),
     ex:$("#t_ex").value.trim(),topic:$("#t_topic").value.trim()||"כללי",week:$("#t_week").value.trim()||"1"};
+  let sent=false;
   if(CLOUD){
     const fixing=FIXING&&FIXING.kind==="term"?FIXING.id:null;
     try{
@@ -818,16 +821,18 @@ $("#addTerm").onclick=async()=>{
         await syncCloud();clearFix();alert("התיקון נשלח וחזר לתור האישור של המרצה.");
       }else{
         await cloudPost({action:"addTerm",data,addedBy:who});await syncCloud();
-        alert("המושג נשלח לגיליון וממתין לאישור.");
+        alert("המושג נשלח וממתין לאישור המרצה.\n\nהוא מופיע עכשיו בטאב \"ההצעות שלי\" — שם אפשר לערוך או למחוק אותו עד שהמרצה יאשר. אין צורך להגיש שוב.");
+        sent=true;
       }
     }
     catch(e){alert("השליחה לענן נכשלה: "+e.message);return;}
   }else{
-    DB.terms.push(Object.assign({id:"t"+Date.now(),status:"approved",origin:"local"},data));
-    save();fillTopicSelects();renderGlossary();alert("המושג נוסף (מקומית בלבד — לא מחובר לענן).");
+    DB.terms.push(Object.assign({id:"t"+Date.now(),status:"approved",origin:"local",addedBy:who},data));
+    save();sent=true;fillTopicSelects();renderGlossary();alert("המושג נוסף (מקומית בלבד — לא מחובר לענן).");
   }
   renderManage();
   ["t_he","t_en","t_short","t_long","t_ex","t_topic"].forEach(id=>$("#"+id).value="");
+  if(sent)goMine();
 };
 $("#addQ").onclick=async()=>{
   const qt=$("#q_text").value.trim();
@@ -841,6 +846,7 @@ $("#addQ").onclick=async()=>{
   const who=requireName(); if(!who)return;
   if(!(FIXING&&FIXING.kind==="question")&&blockDuplicate("question",qt))return;
   const data={term:$("#q_term").value,q:qt,opts,correct:0,exp:$("#q_exp").value.trim()};
+  let sent=false;
   if(CLOUD){
     const fixing=FIXING&&FIXING.kind==="question"?FIXING.id:null;
     try{
@@ -849,16 +855,18 @@ $("#addQ").onclick=async()=>{
         await syncCloud();clearFix();alert("התיקון נשלח וחזר לתור האישור של המרצה.");
       }else{
         await cloudPost({action:"addQuestion",data,addedBy:who});await syncCloud();
-        alert("השאלה נשלחה לגיליון וממתינה לאישור המרצה.");
+        alert("השאלה נשלחה וממתינה לאישור המרצה.\n\nהיא מופיעה עכשיו בטאב \"ההצעות שלי\" — שם אפשר לערוך או למחוק אותה עד שהמרצה יאשר. אין צורך להגיש שוב.");
+        sent=true;
       }
     }
     catch(e){alert("השליחה לענן נכשלה: "+e.message);return;}
   }else{
-    DB.questions.push(Object.assign({id:"q"+Date.now(),status:"pending",origin:"local"},data));
-    save();alert("השאלה נוספה כ'ממתינה' (מקומית בלבד — לא מחובר לענן).");
+    DB.questions.push(Object.assign({id:"q"+Date.now(),status:"pending",origin:"local",addedBy:who},data));
+    save();sent=true;alert("השאלה נוספה כ'ממתינה' (מקומית בלבד — לא מחובר לענן).");
   }
   renderManage();updateAvail();
   ["q_text","q_a0","q_a1","q_a2","q_a3","q_exp"].forEach(id=>$("#"+id).value="");
+  if(sent)goMine();
 };
 $("#cloudSave").onclick=async()=>{
   CLOUD=$("#cloudUrl").value.trim();ADMIN=$("#adminKey").value.trim();UNAME=$("#userName").value.trim();
@@ -934,6 +942,7 @@ function renderMine(){
   $("#mineList").innerHTML=list.length?list.map(mineCard).join(""):
     `<div class="card"><b>לא נמצאו הצעות בשם "${UNAME}"</b><p class="count" style="margin-top:6px">ודאו שהשם רשום בדיוק כפי שנרשם בהגשה (טאב "ניהול והוספה").</p></div>`;
   $$("#mineList [data-fix]").forEach(b=>b.onclick=()=>openFix(b.dataset.kind,b.dataset.fix));
+  $$("#mineList [data-del]").forEach(b=>b.onclick=()=>delMine(b.dataset.kind,b.dataset.del));
   updateMineBadge();
 }
 function mineCard(x){
@@ -944,15 +953,40 @@ function mineCard(x){
   const note = it.note ? `<div class="notebox"><b>הערת המרצה:</b> ${it.note}</div>` : "";
   // editable until the lecturer decides — either returned for revision, or still waiting
   const fix = (st==="revise"||st==="pending")
-    ? `<div style="margin-top:10px">
+    ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
          <button class="btn sm" data-fix="${it.id}" data-kind="${x.kind}">✎ ${st==="revise"?"ערוך ושלח מחדש":"ערוך"}</button>
-         ${st==="pending"?`<span class="count" style="margin-inline-start:8px">ניתן לתקן כל עוד המרצה לא אישר</span>`:""}
+         <button class="btn ghost sm" data-del="${it.id}" data-kind="${x.kind}">🗑 מחק</button>
+         ${st==="pending"?`<span class="count">ניתן לתקן או למחוק כל עוד המרצה לא אישר</span>`:""}
        </div>` : "";
   return `<div class="card">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">
       <span class="chip">${x.kind==="question"?"שאלה":"מושג"}</span>
       <span class="st ${st}">${ST_LABEL[st]||st}</span>
     </div>${head}${note}${fix}</div>`;
+}
+/* Deleting your own submission is how a duplicate gets removed. The row is
+   dropped from the sheet, so it stops counting toward your submissions. */
+async function delMine(kind,id){
+  const it=(kind==="term"?DB.terms:DB.questions).find(x=>x.id===id);
+  if(!it)return;
+  const what=kind==="term"?"המושג":"השאלה";
+  const label=String(kind==="term"?it.he:it.q).slice(0,70);
+  if(!confirm(`למחוק את ${what} "${label}"?\n\nההגשה תוסר לגמרי ולא תיספר לכם. אי אפשר לבטל.`))return;
+  if(CLOUD){
+    try{ await cloudPost({action:"deleteItem",type:kind,id,me:UNAME}); }
+    catch(e){
+      let m=e.message;
+      if(/פעולה לא מוכרת/.test(m))m+="\n\nייתכן שגרסת השרת ישנה — בקשו לפרסם מחדש את Code.gs.";
+      alert("המחיקה נכשלה: "+m);return;
+    }
+    await syncCloud();
+  }else{
+    if(kind==="term")DB.terms=DB.terms.filter(x=>x.id!==id);
+    else DB.questions=DB.questions.filter(x=>x.id!==id);
+    save();
+  }
+  if(FIXING&&FIXING.id===id)clearFix();
+  fillTopicSelects();renderGlossary();updateAvail();renderMine();
 }
 // load a returned item into the add form, and switch that form to "resubmit" mode
 let FIXING=null;
@@ -977,6 +1011,12 @@ function openFix(kind,id){
     $("#q_text").scrollIntoView({behavior:"smooth",block:"center"});
   }
   alert("הפריט נטען לטופס. תקנו לפי הערת המרצה ולחצו \"שלח תיקון מחדש\".");
+}
+/* Students kept re-submitting because the confirmation alert left them on the
+   add form, where a submission is invisible. Land them on their own list. */
+function goMine(){
+  const b=document.querySelector('nav [data-tab="mine"]');
+  if(b){b.click();window.scrollTo({top:0,behavior:"smooth"});}
 }
 function clearFix(){
   FIXING=null;
