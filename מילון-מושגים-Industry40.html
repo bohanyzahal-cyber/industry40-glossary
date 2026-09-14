@@ -806,7 +806,23 @@ function delQ(id){
   if(q&&q.origin==="cloud"){alert("זו שאלה מהענן — כדי למחוק, מחקו את השורה המתאימה בגיליון Google Sheets.");return;}
   DB.questions=DB.questions.filter(x=>x.id!==id);save();renderManage();updateAvail();
 }
-$("#addTerm").onclick=async()=>{
+/* The duplicate check reads DB, which only catches up once the round-trip is over,
+   so a second click during those seconds sent the same item again. Hold the button,
+   and ignore repeat calls, until the handler has finished — however it exits. */
+function oneAtATime(btn,fn){
+  let busy=false;
+  return async()=>{
+    if(busy)return;
+    busy=true;
+    const label=btn.textContent;btn.disabled=true;btn.textContent="שולח…";
+    try{await fn();}
+    finally{
+      busy=false;btn.disabled=false;
+      if(btn.textContent==="שולח…")btn.textContent=label;   // clearFix() may have relabelled it meanwhile
+    }
+  };
+}
+$("#addTerm").onclick=oneAtATime($("#addTerm"),async()=>{
   const he=$("#t_he").value.trim();if(!he){alert("חסר מונח בעברית");return;}
   const who=requireName(); if(!who)return;
   if(!(FIXING&&FIXING.kind==="term")&&blockDuplicate("term",he))return;
@@ -833,8 +849,8 @@ $("#addTerm").onclick=async()=>{
   renderManage();
   ["t_he","t_en","t_short","t_long","t_ex","t_topic"].forEach(id=>$("#"+id).value="");
   if(sent)goMine();
-};
-$("#addQ").onclick=async()=>{
+});
+$("#addQ").onclick=oneAtATime($("#addQ"),async()=>{
   const qt=$("#q_text").value.trim();
   const opts=[$("#q_a0").value.trim(),$("#q_a1").value.trim(),$("#q_a2").value.trim(),$("#q_a3").value.trim()];
   if(!qt){alert("חסרה השאלה.");return;}
@@ -867,7 +883,7 @@ $("#addQ").onclick=async()=>{
   renderManage();updateAvail();
   ["q_text","q_a0","q_a1","q_a2","q_a3","q_exp"].forEach(id=>$("#"+id).value="");
   if(sent)goMine();
-};
+});
 $("#cloudSave").onclick=async()=>{
   CLOUD=$("#cloudUrl").value.trim();ADMIN=$("#adminKey").value.trim();UNAME=$("#userName").value.trim();
   lsSet(CKEY,CLOUD);lsSet(AKEY,ADMIN);lsSet(NKEY,UNAME);
