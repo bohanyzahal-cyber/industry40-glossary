@@ -86,12 +86,17 @@
   .wnote{font-size:12px;color:var(--muted);background:#132a2a;border:1px solid #21403f;border-radius:10px;padding:10px 12px;margin-bottom:18px}
   .header-btns{display:flex;gap:8px;align-items:center}
   .icon-btn{background:rgba(255,255,255,.08);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+  .qgroup{font-size:14px;color:var(--accent);font-weight:700;margin:18px 0 8px}
+  .qcard .qq{font-size:16px}
+  .qcard .qopts{margin:10px 0 6px}
+  .qcard .opt{padding:8px 12px;margin-bottom:6px;font-size:14px}
+  .qcard .qexp{margin:6px 0 0}
   /* ===== מובייל / טלפון ===== */
   @media(max-width:600px){
     header{padding:14px 14px}
     header h1{font-size:17px}
     header p{font-size:11px}
-    .header-btns{width:100%;justify-content:flex-start}
+    .header-btns{width:100%;justify-content:flex-start;flex-wrap:wrap}
     .icon-btn{font-size:11px;padding:6px 9px}
     nav button{font-size:13px;padding:12px 4px}
     main{padding:14px 0 50px}
@@ -141,6 +146,19 @@
     .chip{ background:#fff !important; color:#000 !important; border:1px solid #999 !important; border-radius:20px }
     a{ color:#000 !important; text-decoration:none }
     .count{ color:#000 !important }
+    body.print-questions #glossary{ display:none !important }
+    body.print-questions #quiz, body.print-questions #quizBrowse{ display:block !important }
+    body.print-questions #quizSetup, body.print-questions #quizRun, body.print-questions #quizResult{ display:none !important }
+    .qgroup{ color:#000 !important; font-size:14px; margin:10px 0 4px; border-bottom:1px solid #888; break-after:avoid; page-break-after:avoid }
+    .qcard{ padding:6px 10px !important; margin-bottom:6px !important }
+    .qcard .qq{ font-size:13.5px }
+    .qcard .qopts{ margin:3px 0 }
+    .qcard .opt{ border:none !important; padding:1px 8px; margin:0; font-size:12.5px }
+    .qcard .opt:not(.correct)::before{ content:"○ " }
+    .qcard .opt.correct{ border:1.5px solid #000 !important; border-radius:4px; font-weight:700 }
+    .qcard .qexp{ font-size:12px; margin:3px 0 0 }
+    .qcard .chips{ margin-top:3px }
+    .qcard .chip{ font-size:10px; padding:0 6px }
   }
   #printTitle{display:none}
 </style>
@@ -156,7 +174,7 @@
     <div class="desc">כלי לימוד אישי לקורס: <b>מילון מושגים</b> ו<b>מאגר שאלות תרגול</b>, שנבנה בהדרגה לאורך הסמסטר ומשמש כחומר עזר במבחן (חומר פתוח).</div>
     <div class="wlist">
       <div><b>📖 מילון</b> — כל מונח עם הגדרה, הסבר, דוגמה ושיוך לשבוע. חיפוש וסינון מיידיים.</div>
-      <div><b>✍️ תרגול ומבחן</b> — שאלות רב־ברירה; טעות מפנה ישירות למושג במילון.</div>
+      <div><b>✍️ תרגול ומבחן</b> — שאלות רב־ברירה; טעות מפנה ישירות למושג במילון. אפשר גם לעיין בכל השאלות ולהדפיס אותן.</div>
       <div><b>⚙️ ניהול</b> — הוספת מושגים ושאלות, אישור המרצה, וגיבוי (JSON).</div>
     </div>
     <div style="background:#152e2c;border:1px solid #2a5350;border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:14px;text-align:right">➕ <b>רוצים לתרום מושג או שאלה?</b> טאב <b>"ניהול והוספה"</b> ← מלאו את הטופס ורשמו את שמכם. ההצעה נשמרת בגיליון המשותף ונכנסת כ<b>"ממתין"</b> עד אישור המרצה.</div>
@@ -173,6 +191,7 @@
     </div>
     <div class="header-btns">
       <button class="icon-btn" onclick="printSheet()">🖨 הדפסת המילון</button>
+      <button class="icon-btn" onclick="printQuestions()">🖨 הדפסת השאלות</button>
       <button class="icon-btn" onclick="document.getElementById('welcome').style.display='flex'">ℹ מסך פתיחה</button>
     </div>
   </div>
@@ -214,6 +233,10 @@
         <button class="btn" id="qstart">התחל</button>
       </div>
       <p class="count" id="qavail" style="margin-top:12px"></p>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+        <button class="btn ghost" id="qbrowseOpen">📖 עיון בכל השאלות</button>
+        <span class="count" style="margin-inline-start:8px">כל השאלות המאושרות עם התשובות וההסברים, לקריאה ולהדפסה</span>
+      </div>
     </div>
 
     <div id="quizRun" class="hidden">
@@ -234,6 +257,17 @@
     </div>
 
     <div id="quizResult" class="hidden"></div>
+
+    <div id="quizBrowse" class="hidden">
+      <div class="toolbar">
+        <button class="btn ghost sm" id="qbrowseBack">→ חזרה</button>
+        <input id="qbsearch" class="search" placeholder="חיפוש בשאלות, בתשובות ובהסברים…">
+        <select id="qbtopic"><option value="">כל הנושאים</option></select>
+        <button class="btn ghost sm" onclick="printQuestions()">🖨 הדפסה</button>
+        <span class="count" id="qbcount"></span>
+      </div>
+      <div id="qblist"></div>
+    </div>
   </section>
 
   <!-- ============ MY SUBMISSIONS ============ -->
@@ -570,6 +604,7 @@ async function syncCloud(){
     mergeCloud(j);
     fillTopicSelects();renderGlossary();updateAvail();
     if(!$("#manage").classList.contains("hidden"))renderManage();
+    if(!$("#quizBrowse").classList.contains("hidden"))renderBrowse();
     if(!$("#mine").classList.contains("hidden"))renderMine(); else updateMineBadge();
     const pend=DB.questions.filter(q=>q.status==="pending").length;
     const nT=DB.terms.filter(t=>t.status!=="rejected").length;
@@ -597,6 +632,9 @@ function fillTopicSelects(){
   /* רשימת הנושאים בתרגול נבנית גם מהשאלות עצמן: שאלה שאין לה מושג מאושר
      משתייכת ל"כללי", אחרת היא לא מופיעה באף סינון לפי נושא */
   $("#qtopic").innerHTML=mk([...new Set([...topics(),...approvedQs().map(topicOfQ)])].sort());
+  const bt=$("#qbtopic"), cur=bt.value;
+  bt.innerHTML=$("#qtopic").innerHTML;
+  if([...bt.options].some(o=>o.value===cur))bt.value=cur;
 }
 function renderGlossary(){
   const q=$("#gsearch").value.trim().toLowerCase(), tp=$("#gtopic").value;
@@ -716,6 +754,59 @@ function finishQuiz(){
   $("#quizResult").classList.remove("hidden");
 }
 function backToSetup(){$("#quizResult").classList.add("hidden");$("#quizSetup").classList.remove("hidden");updateAvail();}
+
+/* ============ QUESTION BANK (browse + print) ============ */
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+// opening the bank from a running quiz or its results must lead back there, not to the setup
+let browseFrom="quizSetup";
+function openBrowse(){
+  const views=["quizSetup","quizRun","quizResult"];
+  browseFrom=views.find(v=>!$("#"+v).classList.contains("hidden"))||"quizSetup";
+  views.forEach(v=>$("#"+v).classList.add("hidden"));
+  $("#quizBrowse").classList.remove("hidden");
+  renderBrowse();
+}
+function closeBrowse(){
+  $("#quizBrowse").classList.add("hidden");
+  $("#"+browseFrom).classList.remove("hidden");
+  if(browseFrom==="quizSetup")updateAvail();
+}
+function renderBrowse(){
+  const qy=norm($("#qbsearch").value), tp=$("#qbtopic").value;
+  const all=approvedQs().slice().sort((a,b)=>topicOfQ(a).localeCompare(topicOfQ(b),"he"));
+  const list=all.filter(q=>(!tp||topicOfQ(q)===tp)&&(!qy||norm([q.q,q.exp].concat(q.opts).join(" ")).includes(qy)));
+  $("#qbcount").textContent=`${list.length} מתוך ${all.length} שאלות`;
+  let group=null;
+  $("#qblist").innerHTML=list.map((q,n)=>{
+    const t=termOf(q), tpc=topicOfQ(q);
+    const head=tpc!==group?`<div class="qgroup">${esc(tpc)}</div>`:"";
+    group=tpc;
+    return `${head}<div class="card qcard">
+      <div class="term-he qq">${n+1}. ${esc(q.q)}</div>
+      <div class="qopts">${q.opts.map((o,i)=>`<div class="opt disabled${i===q.correct?" correct":""}">${esc(o)}${i===q.correct?" ✔":""}</div>`).join("")}</div>
+      ${q.exp?`<p class="count qexp"><b>הסבר:</b> ${esc(q.exp)}</p>`:""}
+      ${t.he&&termVisible(t)?`<div class="chips"><a class="chip" style="cursor:pointer" onclick="gotoTerm('${q.term}')">↗ מושג: ${esc(t.he)}</a></div>`:""}
+    </div>`;
+  }).join("")||`<p class="count">לא נמצאו שאלות.</p>`;
+}
+$("#qbrowseOpen").onclick=openBrowse;
+$("#qbrowseBack").onclick=closeBrowse;
+$("#qbsearch").oninput=renderBrowse;$("#qbtopic").onchange=renderBrowse;
+
+const PRINT_TITLE_TERMS=$("#printTitle").textContent;
+function printQuestions(){
+  $$("nav button").forEach(x=>x.classList.remove("active"));
+  document.querySelector('nav [data-tab="quiz"]').classList.add("active");
+  ["glossary","quiz","manage","mine"].forEach(s=>$("#"+s).classList.add("hidden"));
+  $("#quiz").classList.remove("hidden");
+  if($("#quizBrowse").classList.contains("hidden"))openBrowse();
+  $("#qbsearch").value="";$("#qbtopic").value="";renderBrowse();
+  document.body.classList.add("print-questions");
+  $("#printTitle").textContent=PRINT_TITLE_TERMS.replace("מילון מושגים","מאגר שאלות תרגול");
+  setTimeout(()=>window.print(),80);
+}
+// not every mobile browser fires afterprint, so printSheet() also resets this itself
+window.addEventListener("afterprint",()=>{document.body.classList.remove("print-questions");$("#printTitle").textContent=PRINT_TITLE_TERMS;});
 function gotoTerm(id){
   $$("nav button").forEach(x=>x.classList.remove("active"));
   document.querySelector('nav [data-tab="glossary"]').classList.add("active");
@@ -924,6 +1015,7 @@ $("#resetBtn").onclick=()=>{if(confirm("לאפס לנתוני ברירת המח�
 /* ============ PRINT ============ */
 function printSheet(){
   // switch to glossary, clear filters, show all + expand every term, then print
+  document.body.classList.remove("print-questions");$("#printTitle").textContent=PRINT_TITLE_TERMS;
   $$("nav button").forEach(x=>x.classList.remove("active"));
   document.querySelector('nav [data-tab="glossary"]').classList.add("active");
   ["glossary","quiz","manage","mine"].forEach(s=>$("#"+s).classList.add("hidden"));
