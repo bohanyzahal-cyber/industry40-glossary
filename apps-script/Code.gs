@@ -79,6 +79,66 @@ function statusOut_(v) {
   return 'pending';
 }
 
+/** סטטוס מהאפליקציה -> הערך שנכתב בגיליון */
+function statusIn_(s) {
+  return s === 'approved' ? STATUS_APPROVED
+    : s === 'rejected' ? STATUS_REJECTED
+    : s === 'revise' ? STATUS_REVISE
+    : STATUS_PENDING;
+}
+
+/** מיפוי מזהה -> מספר שורה, בקריאת עמודת המזהים בלבד (ולא כל הגיליון) */
+function idRows_(sh) {
+  const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const idCol = head.indexOf('id');
+  const last = sh.getLastRow();
+  const map = {};
+  if (idCol !== -1 && last >= 2) {
+    const col = sh.getRange(2, idCol + 1, last - 1, 1).getValues();
+    for (let i = 0; i < col.length; i++) {
+      const v = String(col[i][0]).trim();
+      if (v && !map[v]) map[v] = i + 2;      // מספר השורה בגיליון
+    }
+  }
+  return { head: head, map: map, last: last };
+}
+
+/** עדכון סטטוס (והערה) לפריט אחד או לרבים — קריאה אחת וכתיבה אחת לכל גיליון.
+ *  כך אישור של עשרים פריטים עולה כמעט כמו אישור של אחד, וזה מה שחוסך למרצה
+ *  את ההמתנה: Apps Script עונה באיטיות, ולכן מספר הקריאות הוא מה שקובע. */
+function applyStatuses_(ss, items) {
+  const done = [], missing = [];
+  ['term', 'question'].forEach(function (type) {
+    const isTerm = type === 'term';
+    const list = items.filter(function (it) { return (it.type === 'term') === isTerm; });
+    if (!list.length) return;
+    const sh = ensureSheet_(ss, isTerm ? SHEET_TERMS : SHEET_QUESTIONS,
+      isTerm ? TERM_HEADERS : QUESTION_HEADERS);
+    const found = idRows_(sh);
+    const stCol = found.head.indexOf('status') + 1;
+    const noteCol = found.head.indexOf('note') + 1;
+    const rows = found.last - 1;
+    if (rows < 1 || !stCol) {
+      list.forEach(function (it) { missing.push(it.id); });
+      return;
+    }
+    const statuses = sh.getRange(2, stCol, rows, 1).getValues();
+    const notes = noteCol ? sh.getRange(2, noteCol, rows, 1).getValues() : null;
+    let wroteStatus = false, wroteNote = false;
+    list.forEach(function (it) {
+      const row = found.map[String(it.id).trim()];
+      if (!row) { missing.push(it.id); return; }
+      statuses[row - 2][0] = statusIn_(it.status);
+      wroteStatus = true;
+      if (notes && typeof it.note === 'string') { notes[row - 2][0] = it.note; wroteNote = true; }
+      done.push(it.id);
+    });
+    if (wroteStatus) sh.getRange(2, stCol, rows, 1).setValues(statuses);
+    if (wroteNote) sh.getRange(2, noteCol, rows, 1).setValues(notes);
+  });
+  return { done: done, missing: missing };
+}
+
 /** קריאת כל השורות מהגיליונות, ללא סינון (לשימוש פנימי בלבד) */
 function readAll_() {
   const terms = rows_(SHEET_TERMS)
@@ -179,35 +239,28 @@ function doPost(e) {
       return json_({ ok: true, terms: all.terms, questions: all.questions });
     }
 
-    /** אישור/ביטול — מוגן בקוד מנהל (Script Property בשם ADMIN_KEY) */
-    if (action === 'setStatus') {
+    /** אישור/ביטול — פריט אחד (setStatus) או כמה בבת אחת (setStatusBulk, עם
+     *  items: [{type,id,status,note}]). מוגן בקוד מנהל (Script Property ADMIN_KEY).
+     *  הערת המרצה (סיבת דחייה / מה לתקן) נשמרת גם לצפיית המגישים. */
+    if (action === 'setStatus' || action === 'setStatusBulk') {
       const key = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
       if (!key || body.adminKey !== key) {
         return json_({ ok: false, error: 'קוד מנהל שגוי' });
       }
-      const sheetName = body.type === 'term' ? SHEET_TERMS : SHEET_QUESTIONS;
-      const sh = ensureSheet_(ss, sheetName,
-        sheetName === SHEET_TERMS ? TERM_HEADERS : QUESTION_HEADERS);
-      const data = sh.getDataRange().getValues();
-      const head = data[0];
-      const idCol = head.indexOf('id');
-      const stCol = head.indexOf('status');
-      const noteCol = head.indexOf('note');
-      for (let i = 1; i < data.length; i++) {
-        if (String(data[i][idCol]) === String(body.id)) {
-          const newStatus = body.status === 'approved' ? STATUS_APPROVED
-            : body.status === 'rejected' ? STATUS_REJECTED
-            : body.status === 'revise' ? STATUS_REVISE
-            : STATUS_PENDING;
-          sh.getRange(i + 1, stCol + 1).setValue(newStatus);
-          // הערת המרצה (סיבת דחייה / מה לתקן) — נשמרת גם לצפיית המגישים
-          if (noteCol !== -1 && typeof body.note === 'string') {
-            sh.getRange(i + 1, noteCol + 1).setValue(body.note);
-          }
-          return json_({ ok: true });
-        }
+      const items = action === 'setStatus'
+        ? [{ type: body.type, id: body.id, status: body.status, note: body.note }]
+        : (body.items || []);
+      if (!items.length) return json_({ ok: false, error: 'לא נשלחו פריטים' });
+      // נעילה — שתי כתיבות במקביל על אותה עמודה היו דורסות זו את זו
+      const lock = LockService.getScriptLock();
+      try { lock.waitLock(25000); }
+      catch (e) { return json_({ ok: false, error: 'השרת עסוק כרגע, נסו שוב' }); }
+      let res;
+      try { res = applyStatuses_(ss, items); } finally { lock.releaseLock(); }
+      if (action === 'setStatus') {
+        return res.done.length ? json_({ ok: true }) : json_({ ok: false, error: 'מזהה לא נמצא' });
       }
-      return json_({ ok: false, error: 'מזהה לא נמצא' });
+      return json_({ ok: true, done: res.done, missing: res.missing });
     }
 
     /** עריכה. שני מסלולים:

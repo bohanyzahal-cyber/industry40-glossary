@@ -385,6 +385,13 @@
         <span class="count" id="approveSaving" style="color:var(--warn)"></span>
       </div>
       <div id="reportBox" class="hidden"></div>
+      <div id="approveMsg" class="count" style="margin:0 0 10px"></div>
+      <div class="toolbar hidden" id="bulkBar" style="margin-bottom:10px">
+        <button class="btn sm" id="bulkApprove">✔ אשר את המסומנים</button>
+        <button class="btn ghost sm" id="bulkAll">סמן הכול</button>
+        <button class="btn ghost sm" id="bulkNone">נקה סימון</button>
+        <span class="count" id="bulkCount"></span>
+      </div>
       <div id="approveList"></div>
       <div class="card" style="margin-top:18px">
         <b>מאושרים — עריכה והחזרה</b>
@@ -571,22 +578,61 @@ function cloudStatus(msg,ok){
 }
 /** השרת מחזיר רק פריטים מאושרים; שליחת השם מוסיפה את ההגשות של אותו אדם בלבד.
  *  במסך האישור נשלח קוד המנהל ומתקבלת הרשימה המלאה. */
+/* Apps Script נהיה איטי ולא יציב תחת עומס: קריאה אחת יכולה להימשך עשרות שניות,
+   להיקטע באמצע, או לחזור כדף HTML של גוגל במקום JSON ("Unexpected token '<'").
+   קודם כל כישלון כזה עלה פעולה שלמה — הפריט חזר לתור והמאשר נאלץ לאשר שוב.
+   לכן: לכל קריאה יש פסק זמן, כישלון זמני נשלח שוב, והקריאות רצות אחת אחרי
+   השנייה — קריאות במקביל רק מאיטות את Apps Script עוד יותר.
+   תשובה מסודרת של השרת ("קוד מנהל שגוי") היא סופית ואינה נשלחת שוב. */
+const RETRY_SAFE={listAll:1,setStatus:1,setStatusBulk:1,updateItem:1,deleteItem:1};
+const CALL_TIMEOUT=75000, RETRY_WAITS=[900,2500,6000];
+let CLOUD_CHAIN=Promise.resolve();
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+/** חיווי שהמערכת עובדת ולא תקועה — בלעדיו ניסיון חוזר נראה כמו מסך קפוא */
+function retryNote(a,tries){
+  const txt=`השרת של גוגל איטי כרגע — מנסה שוב (${a} מתוך ${tries})…`;
+  if(isApproveMode())approveMsg(txt); else cloudStatus(txt);
+}
+async function cloudCall(url,init,tries){
+  let last=null;
+  for(let a=0;a<tries;a++){
+    if(a){retryNote(a+1,tries);await sleep(RETRY_WAITS[Math.min(a-1,RETRY_WAITS.length-1)]+Math.random()*400);}
+    const ctl=(typeof AbortController!=="undefined")?new AbortController():null;
+    const timer=ctl?setTimeout(()=>ctl.abort(),CALL_TIMEOUT):0;
+    try{
+      const r=await fetch(url,ctl?Object.assign({signal:ctl.signal},init):init);
+      const text=await r.text();
+      let j;
+      try{j=JSON.parse(text);}
+      catch(_){throw new Error(r.ok?"השרת החזיר דף במקום נתונים — עומס אצל גוגל":"שגיאת שרת "+r.status);}
+      if(!j.ok){const e=new Error(j.error||"שגיאה לא ידועה");e.fromServer=true;throw e;}
+      return j;
+    }catch(e){
+      // תשובה מסודרת של השרת היא סופית — חוץ מ"עסוק", שכן נכון לנסות שוב
+      if(e.fromServer&&!/עסוק/.test(e.message))throw e;
+      last=(e.name==="AbortError")?new Error("השרת לא ענה בזמן"):e;
+    }finally{ if(timer)clearTimeout(timer); }
+  }
+  throw last;
+}
+function queueCall(run){
+  const next=CLOUD_CHAIN.then(run,run);
+  CLOUD_CHAIN=next.then(()=>{},()=>{});
+  return next;
+}
 async function cloudGet(){
   if(isApproveMode()&&ADMIN){
     return await cloudPost({action:"listAll",adminKey:ADMIN});
   }
   const url=CLOUD+(UNAME?((CLOUD.indexOf("?")===-1?"?":"&")+"me="+encodeURIComponent(UNAME)):"");
-  const r=await fetch(url,{method:"GET"});
-  const j=await r.json();
-  if(!j.ok)throw new Error(j.error||"שגיאה לא ידועה");
-  return j;
+  return queueCall(()=>cloudCall(url,{method:"GET"},3));
 }
 async function cloudPost(payload){
   // text/plain avoids a CORS preflight, which Apps Script does not answer
-  const r=await fetch(CLOUD,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
-  const j=await r.json();
-  if(!j.ok)throw new Error(j.error||"שגיאה לא ידועה");
-  return j;
+  const init={method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)};
+  // הוספה אינה חוזרת על עצמה בבטחה — שליחה שנייה עלולה ליצור כפילות
+  const tries=RETRY_SAFE[payload.action]?4:1;
+  return queueCall(()=>cloudCall(CLOUD,init,tries));
 }
 /* SEED משמש רק כשאין חיבור לשרת. ברגע שהסנכרון מצליח השרת הוא מקור האמת
    היחיד — אחרת פריט שהשרת מנע (למשל מושג שטרם אושר) היה ממשיך להופיע
@@ -1155,6 +1201,9 @@ function initApprove(){
     else{b.classList.add("hidden");$("#reportBtn").textContent="📋 סיכום הגשות לציון";}
   };
   $("#approveKey").addEventListener("keydown",e=>{if(e.key==="Enter")approveLogin();});
+  $("#bulkApprove").onclick=bulkApproveSelected;
+  $("#bulkAll").onclick=()=>{$$("#approveList input[data-pick]").forEach(c=>c.checked=true);refreshBulkBar();};
+  $("#bulkNone").onclick=()=>{$$("#approveList input[data-pick]").forEach(c=>c.checked=false);refreshBulkBar();};
   if(ADMIN){$("#approveKey").value=ADMIN;approveLogin();}
 }
 async function approveLogin(){
@@ -1171,6 +1220,7 @@ async function approveLogin(){
 }
 async function loadApproveQueue(){
   $("#approveCount").textContent="טוען…";
+  approveMsg("");
   // Fetch the full list explicitly. A stale page (loaded before a backend
   // update) would otherwise fall back to the approved-only feed and show an
   // empty queue, which reads as "everything vanished".
@@ -1182,8 +1232,11 @@ async function loadApproveQueue(){
     $("#approveList").innerHTML=`<div class="card" style="border-color:var(--bad)">
       <b style="color:var(--bad)">לא ניתן לטעון את רשימת ההגשות</b>
       <p class="count" style="margin-top:6px">${e.message}</p>
-      <p class="count">אם הדף פתוח כבר זמן רב — רעננו אותו (בטלפון: משיכה מטה) ונסו שוב.</p>
-      <div style="margin-top:10px"><button class="btn sm" onclick="location.reload(true)">רענן את הדף</button></div></div>`;
+      <p class="count">השרת של גוגל עמוס כרגע. הניסיון החוזר נעשה אוטומטית שלוש פעמים — אפשר פשוט לנסות שוב.</p>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn sm" id="queueRetry">נסה שוב</button>
+        <button class="btn ghost sm" onclick="location.reload(true)">רענן את הדף</button></div></div>`;
+    const rt=$("#queueRetry");if(rt)rt.onclick=loadApproveQueue;
     return;
   }
   renderApproveLists();
@@ -1215,6 +1268,70 @@ function bindApproveActions(){
     b.disabled=true;doApprove(b.dataset.type,b.dataset.id,b.dataset.app,b);
   });
   $$("#approveView [data-aedit]").forEach(b=>b.onclick=()=>adminEdit(b.dataset.type,b.dataset.aedit));
+  $$("#approveList input[data-pick]").forEach(c=>c.onchange=refreshBulkBar);
+  refreshBulkBar();
+}
+/* הודעה שאינה חוסמת. alert עוצר את כל המסך עד שלוחצים אישור, וכשהשרת איטי
+   זה קרה אחרי כמעט כל פעולה — וזו הייתה חצי מהסבל. */
+function approveMsg(text,kind){
+  const el=$("#approveMsg");if(!el)return;
+  el.textContent=text||"";
+  el.style.color = kind==="bad"?"var(--bad)" : kind==="ok"?"var(--ok)" : "var(--muted)";
+  if(text&&kind==="ok")setTimeout(()=>{if(el.textContent===text)el.textContent="";},6000);
+}
+function refreshBulkBar(){
+  const bar=$("#bulkBar");if(!bar)return;
+  const all=$$("#approveList input[data-pick]"), n=all.filter(c=>c.checked).length;
+  bar.classList.toggle("hidden",!all.length);
+  $("#bulkCount").textContent=n?`${n} מסומנים`:"סמנו פריטים ואשרו את כולם בבת אחת";
+  $("#bulkApprove").disabled=!n;
+}
+/* אישור מרוכז: בקשה אחת לכל המסומנים במקום בקשה לכל פריט. כשהשרת של גוגל
+   עונה תוך 10–30 שניות, זה ההבדל בין דקה לחצי שעה. */
+async function bulkApproveSelected(){
+  const picks=$$("#approveList input[data-pick]").filter(c=>c.checked)
+    .map(el=>({type:el.dataset.type,id:el.dataset.pick,status:"approved"}));
+  if(!picks.length)return;
+  const prev={};
+  picks.forEach(p=>{
+    const it=(p.type==="term"?DB.terms:DB.questions).find(x=>x.id===p.id);
+    if(it){prev[p.id]=it.status;it.status="approved";}
+    const card=$("#card_"+p.id);if(card)card.remove();
+  });
+  refreshApproveCount();refreshBulkBar();
+  approveBusy(+1);approveMsg(`שולח ${picks.length} אישורים…`);
+  try{
+    const done=await bulkSetStatus(picks);
+    approveMsg(`אושרו ${done.length} פריטים ✓`,"ok");
+    renderApprovedList();bindApproveActions();
+  }catch(e){
+    const done=e.done||[];
+    picks.filter(p=>done.indexOf(p.id)===-1).forEach(p=>{
+      const it=(p.type==="term"?DB.terms:DB.questions).find(x=>x.id===p.id);
+      if(it)it.status=prev[p.id];
+    });
+    renderApproveLists();
+    approveMsg(done.length?`${done.length} אושרו, השאר חזרו לתור — ${e.message}`
+                          :`האישור נכשל והפריטים חזרו לתור — ${e.message}`,"bad");
+  }finally{approveBusy(-1);}
+}
+/** שולח את כולם בבקשה אחת. שרת בגרסה ישנה אינו מכיר את הפעולה — ואז אחד-אחד. */
+async function bulkSetStatus(items){
+  try{
+    const j=await cloudPost({action:"setStatusBulk",items,adminKey:ADMIN});
+    return j.done||items.map(i=>i.id);
+  }catch(e){
+    if(!/פעולה לא מוכרת/.test(e.message))throw e;
+    const done=[];
+    try{
+      for(const it of items){
+        await cloudPost({action:"setStatus",type:it.type,id:it.id,status:it.status,adminKey:ADMIN});
+        done.push(it.id);
+        approveMsg(`נשלחו ${done.length} מתוך ${items.length}…`);
+      }
+    }catch(err){ err.done=done; throw err; }
+    return done;
+  }
 }
 function approveCard(x){
   const it=x.item;
@@ -1237,7 +1354,10 @@ function approveCard(x){
     ${it.note?`<div class="notebox"><b>הערה קודמת שלך:</b> ${it.note}</div>`:""}
     <div style="margin-top:12px">
       <input class="reasonBox hidden" id="reason_${it.id}" style="width:100%" placeholder="סיבת ההחזרה / מה צריך לתקן — יוצג למגישים">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">
+          <input type="checkbox" data-pick="${it.id}" data-type="${x.kind}"> לאישור מרוכז
+        </label>
         <button class="btn sm" data-app="approved" data-type="${x.kind}" data-id="${it.id}">✔ אשר</button>
         <button class="btn ghost sm" data-aedit="${it.id}" data-type="${x.kind}">✎ ערוך</button>
         <button class="btn ghost sm" data-app="revise" data-type="${x.kind}" data-id="${it.id}">↩ החזר לתיקון</button>
@@ -1336,8 +1456,8 @@ function adminEdit(kind,id){
       renderApproveLists();
     }catch(e){
       let m=e.message;
-      if(/שטרם הוכרעה|רשומים בה/.test(m))m+="\n\nנראה שגרסת השרת ישנה — פרסמו מחדש את Code.gs (Deploy → Manage deployments → New version).";
-      alert("השמירה נכשלה: "+m);
+      if(/שטרם הוכרעה|רשומים בה/.test(m))m+=" · נראה שגרסת השרת ישנה — פרסמו מחדש את Code.gs.";
+      approveMsg("השמירה נכשלה — "+m,"bad");
       ev.target.disabled=false;
     }finally{approveBusy(-1);}
   };
@@ -1382,7 +1502,7 @@ async function doApprove(type,id,status,btn){
   }catch(e){
     if(item)item.status=prev;                              // roll back
     renderApproveLists();
-    alert("הפעולה נכשלה ובוטלה: "+e.message);
+    approveMsg("הפעולה נכשלה והפריט חזר לתור — "+e.message,"bad");
   }finally{ approveBusy(-1); }
 }
 /* ===== סיכום הגשות לציון =====
