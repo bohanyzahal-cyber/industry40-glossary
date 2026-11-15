@@ -86,6 +86,8 @@
   .wnote{font-size:12px;color:var(--muted);background:#132a2a;border:1px solid #21403f;border-radius:10px;padding:10px 12px;margin-bottom:18px}
   .header-btns{display:flex;gap:8px;align-items:center}
   .icon-btn{background:rgba(255,255,255,.08);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+  a.icon-btn{text-decoration:none;display:inline-flex;align-items:center;font-family:inherit;line-height:normal}
+  a.icon-btn:hover,.icon-btn:hover{border-color:var(--accent)}
   .qgroup{font-size:14px;color:var(--accent);font-weight:700;margin:18px 0 8px}
   .qcard .qq{font-size:16px}
   .qcard .qopts{margin:10px 0 6px}
@@ -190,6 +192,8 @@
       <p>יזמים ומנכ״לים משתפים · מרצה: תא״ל (מיל׳) שגיב שרביט · בר־אילן</p>
     </div>
     <div class="header-btns">
+      <a class="icon-btn" href="https://bohanyzahal-cyber.github.io/industry40-quiz/industry40-open-book.pdf" target="_blank" rel="noopener" title="מחברת חומר פתוח להדפסה למבחן: מפתח, מילון, סיכומים ושאלות">📘 מחברת למבחן (PDF)</a>
+      <a class="icon-btn" href="https://bohanyzahal-cyber.github.io/industry40-quiz/" target="_blank" rel="noopener" title="בוחן תרגול על כל ההרצאות">✍ בוחן תרגול</a>
       <button class="icon-btn" onclick="printSheet()">🖨 הדפסת המילון</button>
       <button class="icon-btn" onclick="printQuestions()">🖨 הדפסת השאלות</button>
       <button class="icon-btn" onclick="document.getElementById('welcome').style.display='flex'">ℹ מסך פתיחה</button>
