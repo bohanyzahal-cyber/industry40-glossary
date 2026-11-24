@@ -686,13 +686,20 @@ function fillTopicSelects(){
   bt.innerHTML=$("#qtopic").innerHTML;
   if([...bt.options].some(o=>o.value===cur))bt.value=cur;
 }
+/* המילון מוצג לפי א–ת, כמו בחלק א׳ של מחברת החומר הפתוח: קודם מושגים בעברית, אחר כך באנגלית.
+   מרכאות, תבליטים ורווחים בתחילת השם לא נספרים במיון */
+function nameKey(t){return String(t.he||t.en||"").replace(/^[^0-9A-Za-zא-ת]+/,"");}
+function byName(a,b){
+  const x=nameKey(a),y=nameKey(b),hx=/^[א-ת]/.test(x)?0:1,hy=/^[א-ת]/.test(y)?0:1;
+  return hx-hy||x.localeCompare(y,"he",{numeric:true})||String(a.en||"").localeCompare(String(b.en||""),"en");
+}
 function renderGlossary(){
   const q=$("#gsearch").value.trim().toLowerCase(), tp=$("#gtopic").value;
   const visible=DB.terms.filter(termVisible);
   const list=visible.filter(t=>{
     const hit=!q||[t.he,t.en,t.short,t.long,t.ex].join(" ").toLowerCase().includes(q);
     return hit&&(!tp||t.topic===tp);
-  });
+  }).sort(byName);
   $("#gcount").textContent=`${list.length} מתוך ${visible.length} מושגים`;
   $("#glist").innerHTML=list.map(t=>`
     <div class="card">
